@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "section-pipeline"
+version = "0.1.0"
+description = "Conversao e validacao de secoes transversais (DWG -> DXF -> JSON) via LibreDWG"
+requires-python = ">=3.11"
+dependencies = [
+    "ezdxf>=1.3",
+    "matplotlib>=3.8",
+    "shapely>=2.0",
+]
+
+[project.optional-dependencies]
+rich = ["rich>=13.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

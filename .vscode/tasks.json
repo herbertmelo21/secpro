@@ -1,0 +1,53 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Recover temp files (dry-run)",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "args": ["scripts/recover_previous_temp.py"],
+      "problemMatcher": [],
+      "group": "none"
+    },
+    {
+      "label": "Recover temp files (copy)",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "args": ["scripts/recover_previous_temp.py", "--copy"],
+      "problemMatcher": [],
+      "group": "none"
+    },
+    {
+      "label": "Convert sections",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "args": ["scripts/convert_sections.py", "--verbose"],
+      "problemMatcher": [],
+      "group": "build"
+    },
+    {
+      "label": "Validate sections",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "args": ["scripts/validate_sections.py", "--verbose"],
+      "problemMatcher": [],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Validate LA26",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "args": [
+        "scripts/validate_sections.py",
+        "--dxf", "section/DXF",
+        "--reports", "section/reports"
+      ],
+      "problemMatcher": [],
+      "group": "test",
+      "detail": "Roda a validacao geral; o resumo em section/reports/validation_summary.md inclui as checagens especificas de coordenada_la26.dxf"
+    }
+  ]
+}

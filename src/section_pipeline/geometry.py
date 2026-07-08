@@ -195,6 +195,67 @@ def make_alveolar_slot_polyline(
     ]
 
 
+def polygon_area_centroid_inertia(coords: list[Point]) -> dict:
+    """Propriedades seccionais de um poligono simples fechado (shoelace).
+
+    Retorna dict com:
+      area  - area (sempre positiva; orientacao e normalizada internamente)
+      cx/cy - centroide
+      ix/iy - segundos momentos de area em relacao aos eixos QUE PASSAM PELO
+              CENTROIDE (teorema dos eixos paralelos ja aplicado)
+      ixy   - produto de inercia centroidal
+
+    A caminhada VPRO-safe percorre os alveolos por dentro (via canais), entao
+    o shoelace da unica polilinha ja devolve as propriedades LIQUIDAS da secao
+    (contorno menos alveolos) sem tratamento especial de furos.
+    """
+    n = len(coords)
+    if n < 3:
+        return {"area": 0.0, "cx": 0.0, "cy": 0.0, "ix": 0.0, "iy": 0.0, "ixy": 0.0}
+
+    area2 = sx6 = sy6 = ixx12 = iyy12 = ixy24 = 0.0
+    for i in range(n):
+        x1, y1 = coords[i]
+        x2, y2 = coords[(i + 1) % n]
+        cross = x1 * y2 - x2 * y1
+        area2 += cross
+        sx6 += (x1 + x2) * cross
+        sy6 += (y1 + y2) * cross
+        ixx12 += (y1 * y1 + y1 * y2 + y2 * y2) * cross
+        iyy12 += (x1 * x1 + x1 * x2 + x2 * x2) * cross
+        ixy24 += (x1 * y2 + 2.0 * x1 * y1 + 2.0 * x2 * y2 + x2 * y1) * cross
+
+    if area2 < 0:  # normaliza orientacao (CW -> mesmos valores da lista invertida)
+        area2, sx6, sy6, ixx12, iyy12, ixy24 = (
+            -area2, -sx6, -sy6, -ixx12, -iyy12, -ixy24,
+        )
+
+    area = area2 / 2.0
+    if abs(area) < 1e-15:
+        return {"area": 0.0, "cx": 0.0, "cy": 0.0, "ix": 0.0, "iy": 0.0, "ixy": 0.0}
+
+    cx = sx6 / (6.0 * area)
+    cy = sy6 / (6.0 * area)
+    ixx_origin = ixx12 / 12.0
+    iyy_origin = iyy12 / 12.0
+    ixy_origin = ixy24 / 24.0
+    return {
+        "area": area,
+        "cx": cx,
+        "cy": cy,
+        "ix": ixx_origin - area * cy * cy,
+        "iy": iyy_origin - area * cx * cx,
+        "ixy": ixy_origin - area * cx * cy,
+    }
+
+
+def relative_error(a: float, b: float) -> float:
+    """Erro relativo |a - b| / |b| (b = referencia). b ~ 0 -> inf se a != b."""
+    if b == 0.0:
+        return 0.0 if a == 0.0 else float("inf")
+    return abs(a - b) / abs(b)
+
+
 def is_probably_scaled_by_001(points: list[Point], expected_min: float = 0.05) -> bool:
     """Heuristica: sinaliza quando a maior dimensao da bbox e suspeita de estar em mm/100.
 

@@ -50,7 +50,7 @@ for extra in (REPO_ROOT / "src", REPO_ROOT / "scripts"):
     if str(extra) not in sys.path:
         sys.path.insert(0, str(extra))
 
-from section_pipeline import geometry, walk  # noqa: E402
+from section_pipeline import geometry, simplify, walk  # noqa: E402
 from section_pipeline import io as sp_io  # noqa: E402
 from section_pipeline import validation  # noqa: E402
 import process_vpro_dxf as pvd  # noqa: E402  (pipeline geometrico + writers + round-trip)
@@ -70,6 +70,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--outputs", default="outputs", help="pasta raiz das saidas pedidas")
     parser.add_argument("--reports", default="section/reports")
     parser.add_argument("--force", action="store_true", help="sobrescreve saidas existentes")
+    parser.add_argument(
+        "--simplify", action="store_true",
+        help="gera a variante SIMPLIFICADA (rediscretiza arcos dos alveolos com "
+        "--circle-points, validando area/inercia contra a polilinha densa)",
+    )
+    parser.add_argument(
+        "--circle-points", type=int, default=32,
+        help="pontos por circulo completo nos arcos dos alveolos (padrao 32); "
+        f"escala automaticamente por {simplify.CIRCLE_POINTS_LADDER} ate passar",
+    )
+    parser.add_argument(
+        "--max-area-error", type=float, default=0.001,
+        help="erro relativo maximo de area aceito (padrao 0.001 = 0.1%%)",
+    )
+    parser.add_argument(
+        "--max-inertia-error", type=float, default=0.002,
+        help="erro relativo maximo de Ix e Iy aceito (padrao 0.002 = 0.2%%)",
+    )
     return parser.parse_args(argv)
 
 
@@ -170,8 +188,282 @@ def shapely_second_opinion(points: list[Point]) -> list[str]:
     return messages
 
 
+def build_simplified_walk(
+    geo_dense: dict, circle_points: int
+) -> tuple[list[Point], set]:
+    """Caminhada em baixa resolucao NO MESMO frame local do pipeline denso.
+
+    Rediscretiza os arcos (bulges) da entidade fonte com `circle_points` por
+    circulo completo e compensacao de raio (area do setor preservada), depois
+    recentraliza usando EXATAMENTE os offsets do pipeline denso (mid_x/min_y
+    da bbox expandida densa) para que as propriedades sejam comparaveis no
+    mesmo sistema de coordenadas. Ancoras = vertices da entidade fonte.
+    """
+    expanded, anchor_idx = simplify.expand_polyline_lowres(
+        geo_dense["raw_points"], geo_dense["raw_bulges"], circle_points, compensate=True
+    )
+    min_x, min_y, max_x, _max_y = geo_dense["expanded_bbox"]
+    mid_x = (min_x + max_x) / 2.0
+    local = [(x - mid_x, y - min_y) for x, y in expanded]
+    anchors = {walk.node_key(local[i]) for i in anchor_idx}
+    return pvd.dedup_consecutive(local), anchors
+
+
+def write_simplified_preview(points: list[Point], png_path: Path, title: str) -> str | None:
+    """PNG da polilinha simplificada: contorno, 30 primeiros pontos numerados,
+    ponto inicial destacado, titulo com o numero de pontos."""
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return "matplotlib nao instalado - imagem nao gerada"
+
+    xs = [p[0] for p in points] + [points[0][0]]
+    ys = [p[1] for p in points] + [points[0][1]]
+    fig, ax = plt.subplots(figsize=(14, 6))
+    ax.plot(xs, ys, "b-o", linewidth=1.0, markersize=2.5, label="polilinha simplificada")
+    ax.plot(
+        points[0][0], points[0][1], marker="*", markersize=16, color="green",
+        markeredgecolor="darkgreen", linestyle="none", zorder=6, label="ponto inicial",
+    )
+    for i in range(min(30, len(points))):
+        ax.annotate(
+            str(i + 1), points[i], textcoords="offset points", xytext=(4, 5),
+            fontsize=7, color="darkred",
+        )
+    ax.set_aspect("equal")
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="upper right", fontsize=9)
+    ax.set_title(title)
+    ax.set_xlabel("x (m)")
+    ax.set_ylabel("y (m)")
+    fig.tight_layout()
+    png_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(png_path, dpi=150)
+    plt.close(fig)
+    return None
+
+
+def run_simplified(args: argparse.Namespace) -> int:
+    """Variante --simplify: reduz pontos com validacao por propriedades.
+
+    Escala circle_points automaticamente (24 -> 32 -> 48 -> 64, a partir do
+    valor pedido) ate os erros de area/inercia ficarem dentro dos limites.
+    So escreve saidas se TODOS os portoes passarem.
+    """
+    name = args.section_name
+    outputs = Path(args.outputs)
+    reports_dir = Path(args.reports)
+
+    out_dxf = outputs / "dxf" / f"{name}_vpro_safe_simplified.dxf"
+    out_json = outputs / f"{name}_outer_ordered_simplified.json"
+    canonical_dxf = Path("section/DXF") / f"{name}_vpro_safe_simplified.dxf"
+    report_md = reports_dir / f"{name}_simplification_report.md"
+    png_path = reports_dir / f"{name}_simplified_vpro_safe.png"
+    png_copy = outputs / "previews" / f"{name}_simplified_vpro_safe.png"
+    csv_path = reports_dir / f"{name}_simplified_coords.csv"
+
+    for target in (out_dxf, out_json, canonical_dxf):
+        if target.exists() and not args.force:
+            print(f"[ERRO] {target} ja existe - use --force para sobrescrever.")
+            return 1
+
+    # ── referencia densa (mesmo pipeline do modo padrao, so em memoria) ────
+    data = sp_io.load_json(Path(args.input_json))
+    geo = pvd.compute_section_points(data)
+    ordered_dense, _ = order_points_vpro_safe(geo["points_local"])
+
+    # ── escada de circle_points ate passar nos portoes de propriedades ─────
+    attempts: list[dict] = []
+    chosen = None
+    for cp in simplify.circle_points_candidates(args.circle_points):
+        walk_pts, anchors = build_simplified_walk(geo, cp)
+        walk_pts = simplify.simplify_collinear(
+            walk_pts, angle_tol_deg=1.0, dist_tol=1e-6, protected=anchors
+        )
+        walk_pts = simplify.simplify_rdp_topology_safe(
+            walk_pts, tolerance=1e-6, protected=anchors
+        )
+        ordered, y_tol = order_points_vpro_safe(walk_pts)
+        props = validation.validate_section_properties(
+            ordered_dense, ordered, args.max_area_error, args.max_inertia_error
+        )
+        attempts.append({"circle_points": cp, "n_points": len(ordered), "props": props})
+        if props["ok"]:
+            chosen = {
+                "circle_points": cp, "walk_pts": walk_pts, "ordered": ordered,
+                "y_tol": y_tol, "props": props,
+            }
+            break
+
+    if chosen is None:
+        print(f"[FALHOU] nenhuma resolucao {simplify.circle_points_candidates(args.circle_points)} "
+              f"atendeu area<={args.max_area_error} e inercia<={args.max_inertia_error}:")
+        for a in attempts:
+            e = a["props"]["errors"]
+            print(f"  circle_points={a['circle_points']}: {a['n_points']} pts, "
+                  f"area_err={e['area']:.4%}, ix_err={e['ix']:.4%}, iy_err={e['iy']:.4%}")
+        print("Nenhuma saida foi escrita.")
+        return 1
+
+    ordered = chosen["ordered"]
+    props = chosen["props"]
+    cp = chosen["circle_points"]
+
+    # ── validacoes topologicas (mesma bateria do modo padrao) ──────────────
+    graph = walk.build_edge_graph(chosen["walk_pts"], closed=True)
+    cycles = graph.cycle_census()
+    single_global_cycle = len(cycles) == 1 and cycles[0]["is_simple_cycle"]
+    continuous, chord_indices = walk.check_continuous_walk(ordered, graph, closed=True)
+    crossings = walk.self_intersections(ordered, closed=True)
+    clearance, ci, cj = walk.min_nonadjacent_clearance(ordered)
+    basic = validation.validate_polygon_basic(ordered)
+
+    lengths = geometry.segment_lengths(ordered, closed=True)
+    max_len = max(lengths)
+    max_idx = lengths.index(max_len)
+    max_seg_is_real_edge = graph.has_edge(ordered[max_idx], ordered[(max_idx + 1) % len(ordered)])
+
+    min_x, min_y, max_x, max_y = geometry.bbox(ordered)
+    start_is_top_left = (
+        ordered[0][1] >= max_y - (max_y - min_y) * Y_TOL_FRACTION
+        and ordered[0][0] <= (min_x + max_x) / 2
+    )
+    area_signed = geometry.signed_area(ordered)
+    direction = "horario (CW)" if area_signed < 0 else "anti-horario (CCW)"
+    gap_preserved = clearance > 1e-9
+
+    ok_topology = (
+        single_global_cycle and continuous and not crossings and basic.ok
+        and gap_preserved and max_seg_is_real_edge and start_is_top_left
+        and area_signed < 0
+    )
+
+    # ── DXF R12 + round-trip LibreDWG ──────────────────────────────────────
+    out_dxf.parent.mkdir(parents=True, exist_ok=True)
+    doc = pvd.build_r12_polyline_document(ordered)
+    doc.saveas(str(out_dxf))
+    pvd.inject_r12_insunits(out_dxf, insunits=6)
+
+    ezdxf_check = pvd.validate_r12_structure_ezdxf(out_dxf, "POLYLINE")
+    roundtrip = pvd.roundtrip_validate_r12(
+        out_dxf, reports_dir, f"{name}_vpro_safe_simplified", expect_polyline=True
+    )
+    rt_count = roundtrip.get("roundtrip_point_count")
+    if rt_count != len(ordered):
+        roundtrip["ok"] = False
+        roundtrip["messages"].append(
+            f"round-trip retornou {rt_count} vertices, esperado {len(ordered)}"
+        )
+    single_entity_ok = (
+        ezdxf_check["ok"]
+        and ezdxf_check.get("entity_counts", {}).get("POLYLINE", 0) == 1
+        and ezdxf_check.get("closed") is True
+    )
+    ok = ok_topology and single_entity_ok and roundtrip["ok"]
+
+    canonical_dxf.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(out_dxf, canonical_dxf)
+
+    # ── saidas auxiliares ──────────────────────────────────────────────────
+    write_ordered_json(ordered, out_json)
+    csv_msg = pvd.write_vpro_safe_csv(ordered, csv_path)
+    preview_msg = write_simplified_preview(
+        ordered, png_path,
+        f"{name} VPRO-safe SIMPLIFICADA - {len(ordered)} pontos "
+        f"({cp} pts/circulo, {direction})",
+    )
+    if preview_msg is None and png_path.exists():
+        png_copy.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(png_path, png_copy)
+
+    # ── relatorio de simplificacao ─────────────────────────────────────────
+    po, ps, err = props["original"], props["simplified"], props["errors"]
+    n_orig, n_simp = len(ordered_dense), len(ordered)
+    reduction = 100.0 * (1.0 - n_simp / n_orig)
+    check = lambda flag: "OK" if flag else "FALHOU"  # noqa: E731
+
+    lines = [
+        f"# Relatorio de simplificacao VPRO-safe - {name}",
+        "",
+        f"Fonte primaria: `{args.input_json}`; referencia densa: {n_orig} pontos "
+        f"(100 seg/semicirculo). Metodo: rediscretizacao dos arcos dos alveolos NA "
+        f"ORDEM da entidade com compensacao de raio (area do setor preservada), "
+        f"ancoras (cantos/canais/extremos de arco) intocadas; sem ordenacao global "
+        f"por angulo.",
+        "",
+        "## Reducao de pontos",
+        "",
+        f"- Pontos originais: {n_orig}",
+        f"- Pontos simplificados: {n_simp}",
+        f"- Reducao: {reduction:.1f}%",
+        f"- circle_points usado: {cp} (pedido: {args.circle_points}; "
+        f"tentativas: {[(a['circle_points'], a['n_points']) for a in attempts]})",
+        "",
+        "## Propriedades seccionais (originais vs simplificadas)",
+        "",
+        f"| Propriedade | Original | Simplificada | Erro rel. | Limite |",
+        f"|---|---|---|---|---|",
+        f"| Area A (m^2) | {po['area']:.8f} | {ps['area']:.8f} | {err['area']:.4%} | {args.max_area_error:.2%} |",
+        f"| Ix (m^4) | {po['ix']:.6e} | {ps['ix']:.6e} | {err['ix']:.4%} | {args.max_inertia_error:.2%} |",
+        f"| Iy (m^4) | {po['iy']:.6e} | {ps['iy']:.6e} | {err['iy']:.4%} | {args.max_inertia_error:.2%} |",
+        f"| Ixy (m^4) | {po['ixy']:.6e} | {ps['ixy']:.6e} | (informativo) | - |",
+        f"| Cx (m) | {po['cx']:.6f} | {ps['cx']:.6f} | dif abs {err['cx']:.2e} m | - |",
+        f"| Cy (m) | {po['cy']:.6f} | {ps['cy']:.6f} | dif abs {err['cy']:.2e} m | - |",
+        "",
+        f"- [{check(err['area'] <= args.max_area_error)}] erro de area dentro do limite",
+        f"- [{check(err['ix'] <= args.max_inertia_error)}] erro de Ix dentro do limite",
+        f"- [{check(err['iy'] <= args.max_inertia_error)}] erro de Iy dentro do limite",
+        "",
+        "## Topologia e caminhada (mesma bateria do export denso)",
+        "",
+        f"- Maior salto entre pontos consecutivos: {max_len:.6f} m "
+        f"(indice {max_idx}; aresta real da borda: {max_seg_is_real_edge})",
+        f"- [{check(single_global_cycle)}] 1 loop global fechado (graus: {graph.degree_census()})",
+        f"- [{check(continuous)}] caminhada continua sem cordas"
+        + (f" (violacoes: {chord_indices[:10]})" if chord_indices else ""),
+        f"- [{check(not crossings)}] sem self-intersection"
+        + (f" (cruzamentos: {crossings[:10]})" if crossings else ""),
+        f"- [{check(gap_preserved)}] canal dos alveolos preservado: folga minima "
+        f"{clearance * 1000:.3f} mm (indices {ci} e {cj})",
+        f"- [{check(start_is_top_left)}] inicio no canto superior esquerdo: "
+        f"({ordered[0][0]:.6f}, {ordered[0][1]:.6f})",
+        f"- [{check(area_signed < 0)}] sentido: {direction}",
+        f"- [{check(basic.ok)}] sem duplicatas/segmentos nulos",
+        f"- [{check(single_entity_ok)}] DXF R12 com 1 POLYLINE fechada: "
+        f"{ezdxf_check.get('entity_counts')}",
+        f"- [{check(roundtrip['ok'])}] round-trip LibreDWG: {rt_count} vertices",
+    ]
+    lines += [f"  - {m}" for m in roundtrip["messages"]]
+    lines += [
+        "",
+        "## Saidas",
+        "",
+        f"- DXF: `{out_dxf}` (copia canonica `{canonical_dxf}`)",
+        f"- JSON ordenado: `{out_json}`",
+        f"- CSV: `{csv_path}`" + (f" (erro: {csv_msg})" if csv_msg else ""),
+        f"- PNG: `{png_path}`" + (f" (erro: {preview_msg})" if preview_msg else ""),
+        "",
+        f"**Resultado: {'PASSOU' if ok else 'FALHOU'} - "
+        + (
+            "gerar o AHK a partir do JSON simplificado e validar import no VPRO**"
+            if ok
+            else "NAO usar no VPRO ate corrigir os itens acima**"
+        ),
+        "",
+    ]
+    sp_io.save_report(report_md, "\n".join(lines))
+    print("\n".join(lines))
+    print(f"relatorio salvo em {report_md}")
+    return 0 if ok else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.simplify:
+        return run_simplified(args)
     name = args.section_name
     outputs = Path(args.outputs)
     reports_dir = Path(args.reports)

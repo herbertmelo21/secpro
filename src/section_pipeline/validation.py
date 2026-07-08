@@ -146,6 +146,46 @@ def validate_la26_section(
     return result
 
 
+def validate_section_properties(
+    original_coords: list[Point],
+    simplified_coords: list[Point],
+    max_area_error: float = 0.001,
+    max_inertia_error: float = 0.002,
+) -> dict:
+    """Compara propriedades seccionais (A, Cx, Cy, Ix, Iy, Ixy) entre a
+    polilinha original (referencia) e a simplificada.
+
+    Criterio de aceite (requisito): erro relativo de area <= max_area_error e
+    erros relativos de Ix e Iy <= max_inertia_error. Cx/Cy/Ixy sao reportados
+    para conferencia, mas nao sao portao de aceite (Ixy ~ 0 em secoes quase
+    simetricas - erro relativo dele nao e um indicador estavel).
+    """
+    orig = geometry.polygon_area_centroid_inertia(original_coords)
+    simp = geometry.polygon_area_centroid_inertia(simplified_coords)
+
+    errors = {
+        "area": geometry.relative_error(simp["area"], orig["area"]),
+        "ix": geometry.relative_error(simp["ix"], orig["ix"]),
+        "iy": geometry.relative_error(simp["iy"], orig["iy"]),
+        "ixy": geometry.relative_error(simp["ixy"], orig["ixy"]),
+        "cx": abs(simp["cx"] - orig["cx"]),
+        "cy": abs(simp["cy"] - orig["cy"]),
+    }
+    ok = (
+        errors["area"] <= max_area_error
+        and errors["ix"] <= max_inertia_error
+        and errors["iy"] <= max_inertia_error
+    )
+    return {
+        "ok": ok,
+        "original": orig,
+        "simplified": simp,
+        "errors": errors,
+        "max_area_error": max_area_error,
+        "max_inertia_error": max_inertia_error,
+    }
+
+
 def _estimate_notch_count(points: list[Point]) -> int:
     """Heuristica: conta quantas vezes a coordenada Y minima local da secao e revisitada
     na borda inferior, como proxy do numero de recortes/alveolos.

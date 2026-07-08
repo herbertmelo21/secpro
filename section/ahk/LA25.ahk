@@ -1,6 +1,6 @@
 #Requires AutoHotkey v2.0
 SetTitleMatchMode(2)
-SetKeyDelay(30, 30)
+SetKeyDelay(100, 100)
 
 ; ═══════════════════════════════════════════════════════════════════════════
 ; CONFIGURAÇÃO DE NAVEGAÇÃO NO GRID
@@ -24,7 +24,7 @@ SetKeyDelay(30, 30)
 USAR_CONTROL_MODE := false
 
 ; Título da janela VPro/SecPro (use Window Spy para verificar)
-VPRO_TITULO := "VPro"
+VPRO_TITULO := "Seção poligonal"
 
 ; ClassNN dos controles descobertos com vpro_control_discovery.ahk:
 ; Deixe vazios para usar modo fallback (Send/Click)
@@ -203,16 +203,29 @@ coords := [
 ; ═══════════════════════════════════════════════════════════════════════════
 
 F8:: {
+    ; CoordMode("Mouse", "Window") garante que Click() usa coordenadas relativas à janela
+    ; e não absolutas da tela. Isso é crítico para evitar cliques fora do VPro.
     CoordMode("Mouse", "Window")
 
     ; Encontra a janela do VPro/SecPro
-    vpro_hwnd := WinExist("ahk_class " . VPRO_TITULO)
+    vpro_hwnd := WinExist(VPRO_TITULO)
     if not vpro_hwnd {
         MsgBox(48, "Erro", "VPro/SecPro não encontrado. Verifique o título.")
         return
     }
 
+    ; Ativa a janela e aguarda
+    WinActivate("ahk_id " . vpro_hwnd)
+    WinWaitActive("ahk_id " . vpro_hwnd, , 2)
+    Sleep(1000)
+
     for i, row in coords {
+        ; Verifica se a janela perdeu o foco
+        if !WinActive("ahk_id " . vpro_hwnd) {
+            MsgBox(48, "Erro", "A janela do VPro perdeu o foco. Automação interrompida.")
+            return
+        }
+
         x_value := row[1]
         y_value := row[2]
 
@@ -247,12 +260,13 @@ F8:: {
                     ControlClick(PLUS_BUTTON_CLASSNN, "ahk_id " . vpro_hwnd)
                 } else {
                     ; Fallback para botão "+" (Click)
+                    ; Coordenadas PLUS_X, PLUS_Y são relativas à janela do VPro (por CoordMode)
                     Click(PLUS_X, PLUS_Y)
                 }
-                Sleep(80)
+                Sleep(300)
 
                 ; Aguarda a nova linha ser criada
-                Sleep(50)
+                Sleep(300)
             }
         } else {
             ; ───────────────────────────────────────────────────────────
@@ -260,12 +274,19 @@ F8:: {
             ; ───────────────────────────────────────────────────────────
 
             SendText(x_value)     ; Digita X
-            Send("{Tab}")       ; Move para Y
+            Sleep(150)
+
+            Send("{Tab}")         ; Move para Y
+            Sleep(150)
+
             SendText(y_value)     ; Digita Y
+            Sleep(150)
 
             if i < coords.Length {
+                ; Clica no botão "+" para criar nova linha
+                ; Coordenadas PLUS_X, PLUS_Y são relativas à janela do VPro (por CoordMode)
                 Click(PLUS_X, PLUS_Y)
-                Sleep(80)
+                Sleep(300)
 
                 ; Navega conforme modo selecionado
                 if AFTER_PLUS_MODE = "tab_tab" {
@@ -277,9 +298,11 @@ F8:: {
                     Send("{Left}")
                 }
                 else if AFTER_PLUS_MODE = "click_x_cell" {
+                    ; Clica na célula x(m) da próxima linha
+                    ; Coordenadas X_CELL_X e clickY são relativas à janela do VPro (por CoordMode)
                     clickY := X_CELL_Y_FIRST + (i - 1) * ROW_HEIGHT
                     Click(X_CELL_X, clickY)
-                    Sleep(50)
+                    Sleep(300)
                 }
             }
         }

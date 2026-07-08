@@ -14,6 +14,20 @@
 
 **Resultado: FALHOU**
 
+## LA25_vpro.dxf
+
+- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dxf2dwg -y -o /tmp/section_pipeline_validate_mr1xrsik/LA25_vpro.dwg section/DXF/LA25_vpro.dxf
+veja log em section/reports/LA25_vpro.dxf2dwg.log
+- Entidades: {'LWPOLYLINE': 1}
+- LWPOLYLINE: 1
+- CIRCLE: False, ARC: False, LINE: False
+- $INSUNITS: 6 (6 = metros)
+- Bounding box: x=[-0.6250, 0.6250] y=[0.0000, 0.2502] (largura=1.2501 m, altura=0.2502 m)
+  - OK - sem pontos consecutivos coincidentes
+  - OK - sem segmentos de comprimento zero
+
+**Resultado: FALHOU**
+
 ## coordenada_la26.dxf
 
 - Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): OK - dxf2dwg + dwgread -O JSON OK, JSON valido

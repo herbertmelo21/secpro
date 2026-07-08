@@ -84,18 +84,86 @@ def make_circle_points(
     segments: int = 200,
     clockwise: bool = True,
     close: bool = False,
+    start_angle_deg: float = 0.0,
 ) -> list[Point]:
-    """Gera pontos aproximando um circulo, para conferencia/preview (nao para DXF final)."""
+    """Gera pontos aproximando um circulo/poligono regular inscrito.
+
+    Com segments=20 e start_angle_deg=-90, gera um poligono regular de 20 lados com um
+    vertice exatamente no ponto mais baixo (util para conectar um alveolo a uma fenda
+    vertical na face inferior da secao, no mesmo espirito de um circulo tangente).
+    """
     if segments < 3:
         raise ValueError("segments deve ser >= 3")
     direction = -1.0 if clockwise else 1.0
+    offset = math.radians(start_angle_deg)
     points = []
     for i in range(segments):
-        theta = direction * 2.0 * math.pi * i / segments
+        theta = direction * 2.0 * math.pi * i / segments + offset
         points.append((cx + radius * math.cos(theta), cy + radius * math.sin(theta)))
     if close:
         points.append(points[0])
     return points
+
+
+def polygon_moments(points: list[Point]) -> tuple[float, float, float, float, float]:
+    """Momentos de um poligono simples em relacao a ORIGEM (0,0), pelo metodo do shoelace.
+
+    Retorna (area, area*cx, area*cy, Ixx_origem, Iyy_origem), onde Ixx/Iyy sao os
+    segundos momentos de area em relacao aos eixos x/y que passam pela origem (nao pelo
+    centroide). area e positiva para CCW e negativa para CW - isso e proposital: permite
+    somar contribuicoes de contorno externo (CCW) e furos (CW) diretamente, sem tratamento
+    especial, para obter as propriedades da secao composta (contorno menos furos).
+    """
+    n = len(points)
+    area2 = 0.0
+    cx_a = 0.0
+    cy_a = 0.0
+    ixx = 0.0
+    iyy = 0.0
+    for i in range(n):
+        x1, y1 = points[i]
+        x2, y2 = points[(i + 1) % n]
+        cross = x1 * y2 - x2 * y1
+        area2 += cross
+        cx_a += (x1 + x2) * cross
+        cy_a += (y1 + y2) * cross
+        ixx += (y1 * y1 + y1 * y2 + y2 * y2) * cross
+        iyy += (x1 * x1 + x1 * x2 + x2 * x2) * cross
+    area = area2 / 2.0
+    return area, cx_a / 6.0, cy_a / 6.0, ixx / 12.0, iyy / 12.0
+
+
+def composite_section_properties(
+    loops: list[list[Point]],
+) -> dict:
+    """Propriedades de uma secao composta por varios loops (1 contorno externo CCW + N
+    furos CW, ou vice-versa - o sinal da area de cada loop e que decide a contribuicao).
+
+    Retorna dict com area, centroid (cx, cy), e Ix/Iy em relacao ao PROPRIO CENTROIDE da
+    secao composta (nao em relacao a origem), via teorema dos eixos paralelos.
+    """
+    area = 0.0
+    cx_a = 0.0
+    cy_a = 0.0
+    ixx_origin = 0.0
+    iyy_origin = 0.0
+    for loop in loops:
+        a, cxa, cya, ixx, iyy = polygon_moments(loop)
+        area += a
+        cx_a += cxa
+        cy_a += cya
+        ixx_origin += ixx
+        iyy_origin += iyy
+
+    if abs(area) < 1e-15:
+        return {"area": 0.0, "centroid": (0.0, 0.0), "ix": 0.0, "iy": 0.0}
+
+    cx = cx_a / area
+    cy = cy_a / area
+    # eixos paralelos: I_origem = I_centroide + A*d^2  =>  I_centroide = I_origem - A*d^2
+    ix = ixx_origin - area * cy * cy
+    iy = iyy_origin - area * cx * cx
+    return {"area": area, "centroid": (cx, cy), "ix": ix, "iy": iy}
 
 
 def make_alveolar_slot_polyline(

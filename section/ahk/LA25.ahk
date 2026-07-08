@@ -220,11 +220,15 @@ F8:: {
     Sleep(1000)
 
     for i, row in coords {
-        ; Verifica se a janela perdeu o foco
-        if !WinActive("ahk_id " . vpro_hwnd) {
-            MsgBox(48, "Erro", "A janela do VPro perdeu o foco. Automação interrompida.")
+        ; Verifica se a janela foi fechada (não apenas se perdeu foco)
+        if !WinExist("ahk_id " . vpro_hwnd) {
+            MsgBox(48, "Erro", "A janela do VPro foi fechada. Automação interrompida.")
             return
         }
+
+        ; Reativa a janela e aguarda
+        WinActivate("ahk_id " . vpro_hwnd)
+        Sleep(200)
 
         x_value := row[1]
         y_value := row[2]
@@ -265,6 +269,10 @@ F8:: {
                 }
                 Sleep(300)
 
+                ; Reativa janela após clique no "+"
+                WinActivate("ahk_id " . vpro_hwnd)
+                Sleep(200)
+
                 ; Aguarda a nova linha ser criada
                 Sleep(300)
             }
@@ -288,6 +296,10 @@ F8:: {
                 Click(PLUS_X, PLUS_Y)
                 Sleep(300)
 
+                ; Reativa janela após clique no "+"
+                WinActivate("ahk_id " . vpro_hwnd)
+                Sleep(200)
+
                 ; Navega conforme modo selecionado
                 if AFTER_PLUS_MODE = "tab_tab" {
                     Send("{Tab}")
@@ -300,7 +312,7 @@ F8:: {
                 else if AFTER_PLUS_MODE = "click_x_cell" {
                     ; Clica na célula x(m) da próxima linha
                     ; Coordenadas X_CELL_X e clickY são relativas à janela do VPro (por CoordMode)
-                    clickY := X_CELL_Y_FIRST + (i - 1) * ROW_HEIGHT
+                    clickY := X_CELL_Y_FIRST + i * ROW_HEIGHT
                     Click(X_CELL_X, clickY)
                     Sleep(300)
                 }

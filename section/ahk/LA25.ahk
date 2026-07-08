@@ -1,8 +1,28 @@
 #Requires AutoHotkey v2.0
 SetKeyDelay(30, 30)
 
+; ═══════════════════════════════════════════════════════════════════════════
+; CONFIGURAÇÃO DE NAVEGAÇÃO NO GRID
+; ═══════════════════════════════════════════════════════════════════════════
+
+; Coordenadas do botão "+" para criar nova linha
 PLUS_X := 38
 PLUS_Y := 137
+
+; Modo de navegação após clicar no "+":
+; "tab_tab"      → Send Tab, Tab (simples, pode falhar se grid tiver foco)
+; "down_left"    → Send Down, Left (alternativa ao Tab)
+; "click_x_cell" → Clica direto na célula x(m) da linha (mais preciso)
+AFTER_PLUS_MODE := "click_x_cell"
+
+; Constantes para modo "click_x_cell":
+; Use Window Spy do AutoHotkey para medir essas distâncias:
+; - X_CELL_X: posição X da célula x(m) dentro da linha
+; - X_CELL_Y_FIRST: posição Y da célula x(m) da primeira linha (após "+")
+; - ROW_HEIGHT: altura de cada linha do grid
+X_CELL_X := 135
+X_CELL_Y_FIRST := 181
+ROW_HEIGHT := 19
 
 coords := [
     ["0,441", "0,000"],
@@ -137,27 +157,64 @@ coords := [
     ["0,441", "0,000"]
 ]
 
-; USO:
-; 1. No VPro/SecPro, clique uma vez no botão "+" para criar a primeira linha.
-; 2. Clique na célula x(m) da linha 1.
-; 3. Aperte F8.
+; ═══════════════════════════════════════════════════════════════════════════
+; USO DO SCRIPT:
+; ═══════════════════════════════════════════════════════════════════════════
 ;
-; Se o clique no "+" não acertar, ajuste PLUS_X e PLUS_Y.
-; Use Window Spy do AutoHotkey para pegar a coordenada correta.
+; 1. Abra VPro/SecPro e navegue até a tabela de coordenadas
+; 2. Clique UMA VEZ no botão "+" para criar a linha 1
+; 3. Clique na célula x(m) da linha 1
+; 4. Aperte F8 no teclado
+; 5. Aguarde o script preencher todas as 130 coordenadas
+;
+; ═══════════════════════════════════════════════════════════════════════════
+; MODO DE NAVEGAÇÃO:
+; ═══════════════════════════════════════════════════════════════════════════
+;
+; Se o script não funcionar corretamente, mude AFTER_PLUS_MODE:
+;
+; • Use "tab_tab" se o grid responde bem a teclas Tab
+; • Use "down_left" se preferir utilizar setas do teclado
+; • Use "click_x_cell" para ser mais preciso (requer ajuste das constantes)
+;
+; Para ajustar as constantes do modo "click_x_cell":
+; 1. Abra Window Spy (AutoHotkey Tools)
+; 2. Mova o mouse sobre a célula x(m) da linha 1
+;    → Anote o valor X (será X_CELL_X)
+;    → Anote o valor Y (será X_CELL_Y_FIRST)
+; 3. Mova o mouse sobre a célula x(m) da linha 2
+;    → Calcule: ROW_HEIGHT = Y_linha2 - X_CELL_Y_FIRST
+;
+; ═══════════════════════════════════════════════════════════════════════════
 
 F8:: {
     CoordMode("Mouse", "Window")
 
     for i, row in coords {
-        SendText(row[1])
-        Send("{Tab}")
-        SendText(row[2])
+        SendText(row[1])     ; Digita X
+        Send("{Tab}")      ; Move para Y
+        SendText(row[2])     ; Digita Y
 
         if i < coords.Length {
             Click(PLUS_X, PLUS_Y)
             Sleep(80)
-            Send("{Tab}")
-            Send("{Tab}")
+
+            ; Navega conforme modo selecionado
+            if AFTER_PLUS_MODE = "tab_tab" {
+                Send("{Tab}")
+                Send("{Tab}")
+            }
+            else if AFTER_PLUS_MODE = "down_left" {
+                Send("{Down}")
+                Send("{Left}")
+            }
+            else if AFTER_PLUS_MODE = "click_x_cell" {
+                ; Calcula posição Y da célula x(m) para a linha i+1
+                ; Linhas de dados começam em X_CELL_Y_FIRST
+                clickY := X_CELL_Y_FIRST + (i - 1) * ROW_HEIGHT
+                Click(X_CELL_X, clickY)
+                Sleep(50)
+            }
         }
     }
 }

@@ -231,7 +231,11 @@ def compute_section_points(data: dict, segments_per_semicircle: int = SEGMENTS_P
     mid_x = (min_x + max_x) / 2.0
     points_local = [(x - mid_x, y - min_y) for x, y in cleaned]
 
-    local_bbox = geometry.bbox(points_local)
+    area_before = geometry.signed_area(points_local)
+    points_vpro_safe = geometry.make_vpro_safe_order(points_local)
+    area_after = geometry.signed_area(points_vpro_safe)
+
+    local_bbox = geometry.bbox(points_vpro_safe)
 
     return {
         "selected": selected,
@@ -241,6 +245,9 @@ def compute_section_points(data: dict, segments_per_semicircle: int = SEGMENTS_P
         "original_bbox": original_bbox,
         "expanded_bbox": expanded_bbox,
         "points_local": points_local,
+        "points_vpro_safe": points_vpro_safe,
+        "area_before_reorder": area_before,
+        "area_after_reorder": area_after,
         "local_bbox": local_bbox,
         "width": local_bbox[2] - local_bbox[0],
         "height": local_bbox[3] - local_bbox[1],
@@ -284,6 +291,52 @@ def write_preview(points: list[Point], preview_path: Path, title: str) -> str | 
     fig.savefig(preview_path, dpi=150)
     plt.close(fig)
     return None
+
+
+def write_vpro_safe_validation_image(points: list[Point], image_path: Path, title: str) -> str | None:
+    """Imagem de validacao VPRO-safe: polilinha final com primeiros 20 pontos numerados."""
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return "matplotlib nao instalado - imagem nao gerada"
+
+    coords = points + [points[0]]
+    xs, ys = zip(*coords)
+    fig, ax = plt.subplots(figsize=(12, 8))
+    ax.plot(xs, ys, "b-", linewidth=1, alpha=0.7, label="Polilinha")
+    ax.plot(xs[0], ys[0], "go", markersize=12, label="Ponto inicial", zorder=5)
+
+    for i in range(min(20, len(points))):
+        ax.plot(xs[i], ys[i], "ro", markersize=6)
+        ax.text(xs[i], ys[i], str(i + 1), fontsize=8, ha="center", va="bottom")
+
+    ax.set_aspect("equal")
+    ax.set_title(title, fontsize=14, fontweight="bold")
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(image_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return None
+
+
+def write_vpro_safe_csv(points: list[Point], csv_path: Path) -> str | None:
+    """CSV com coordenadas e distancia ao proximo ponto."""
+    try:
+        csv_path.parent.mkdir(parents=True, exist_ok=True)
+        n = len(points)
+        lines = ["index,x,y,dist_to_next"]
+        for i, (x, y) in enumerate(points):
+            next_point = points[(i + 1) % n]
+            dist = math.hypot(next_point[0] - x, next_point[1] - y)
+            lines.append(f"{i},{x:.6f},{y:.6f},{dist:.6f}")
+        csv_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return None
+    except Exception as e:
+        return f"erro ao escrever CSV: {e}"
 
 
 def build_minimal_document(points_local: list[Point]) -> "ezdxf.document.Drawing":
@@ -673,16 +726,23 @@ def run_ezdxf_lwpolyline(
     """Writer padrao (existente, inalterado em comportamento): DXF R2000 com LWPOLYLINE via ezdxf."""
     report_path = reports_dir / f"{section_name}_vpro_report.md"
     preview_path = preview_dir / f"{section_name}_vpro.png"
+    vpro_safe_image = reports_dir / f"{section_name}_vpro_safe_order.png"
+    vpro_safe_csv = reports_dir / f"{section_name}_vpro_safe_coords.csv"
 
     points_local = geo["points_local"]
-    basic = validation.validate_polygon_basic(points_local)
+    points_vpro_safe = geo["points_vpro_safe"]
+    basic = validation.validate_polygon_basic(points_vpro_safe)
 
-    doc = build_minimal_document(points_local)
+    doc = build_minimal_document(points_vpro_safe)
     doc.saveas(str(output_dxf))
     logger.info("DXF VPRO-safe escrito em %s", output_dxf)
 
     roundtrip = roundtrip_validate(output_dxf, reports_dir)
     ok = basic.ok and roundtrip["ok"]
+
+    lengths = geometry.segment_lengths(points_vpro_safe)
+    max_jump = max(lengths) if lengths else 0.0
+    max_jump_idx = lengths.index(max_jump) if lengths else -1
 
     lines = [
         f"# Relatorio VPRO-safe DXF - {section_name}",
@@ -703,13 +763,22 @@ def run_ezdxf_lwpolyline(
         f"- Bounding box original apos discretizar arcos (coords absolutas): {geo['expanded_bbox']}",
         f"- Numero final de pontos apos discretizacao e limpeza: {len(points_local)}",
         "",
+        "## Ordenacao VPRO-safe",
+        "",
+        f"- Numero de pontos na polilinha final: {len(points_vpro_safe)}",
+        f"- Area orientada ANTES da reordenacao: {geo['area_before_reorder']:.6f}",
+        f"- Area orientada DEPOIS da reordenacao: {geo['area_after_reorder']:.6f}",
+        f"- Ponto inicial (superior esquerdo): ({points_vpro_safe[0][0]:.6f}, {points_vpro_safe[0][1]:.6f})",
+        f"- Sentido: {'horario (CW)' if geo['area_after_reorder'] < 0 else 'anti-horario (CCW)'}",
+        f"- Maior salto entre pontos consecutivos: {max_jump:.6f} m (entre ponto {max_jump_idx} e {(max_jump_idx + 1) % len(points_vpro_safe)})",
+        "",
         "## Geometria local (sem escala aplicada)",
         "",
         f"- Bounding box local: {geo['local_bbox']}",
         f"- Largura: {geo['width']:.4f} m",
         f"- Altura: {geo['height']:.4f} m",
         "",
-        "## Validacao geometrica (local, pre-escrita)",
+        "## Validacao geometrica (local, pos-reordenacao)",
         "",
     ]
     lines += [f"  - {c}" for c in basic.checks]
@@ -728,13 +797,29 @@ def run_ezdxf_lwpolyline(
     ]
     lines += [f"  - {m}" for m in roundtrip["messages"]]
 
-    preview_message = write_preview(points_local, preview_path, f"{section_name} (VPRO-safe)")
+    preview_message = write_preview(points_vpro_safe, preview_path, f"{section_name} (VPRO-safe)")
     if preview_message is None:
         lines.append("")
         lines.append(f"Preview gerado em `{preview_path}`.")
     else:
         lines.append("")
         lines.append(f"Preview nao gerado: {preview_message}")
+
+    vpro_safe_image_message = write_vpro_safe_validation_image(
+        points_vpro_safe, vpro_safe_image, f"{section_name} VPRO-safe order"
+    )
+    if vpro_safe_image_message is None:
+        lines.append("")
+        lines.append(f"Imagem de validacao VPRO-safe gerada em `{vpro_safe_image}`.")
+    else:
+        lines.append("")
+        lines.append(f"Imagem nao gerada: {vpro_safe_image_message}")
+
+    vpro_safe_csv_message = write_vpro_safe_csv(points_vpro_safe, vpro_safe_csv)
+    if vpro_safe_csv_message is None:
+        lines.append(f"CSV com coordenadas gerado em `{vpro_safe_csv}`.")
+    else:
+        lines.append(f"CSV nao gerado: {vpro_safe_csv_message}")
 
     lines.append("")
     lines.append(f"**Resultado: {'PASSOU' if ok else 'FALHOU'} - {'VPRO-safe' if ok else 'NAO VPRO-safe'}**")

@@ -205,3 +205,43 @@ def is_probably_scaled_by_001(points: list[Point], expected_min: float = 0.05) -
     min_x, min_y, max_x, max_y = bbox(points)
     largest = max(max_x - min_x, max_y - min_y)
     return largest < expected_min
+
+
+def signed_area(coords: list[Point]) -> float:
+    """Area orientada da polilinha (metodo shoelace, positiva=CCW, negativa=CW)."""
+    return polygon_area(coords)
+
+
+def rotate_to_start(coords: list[Point]) -> list[Point]:
+    """Rotaciona a lista para começar no ponto superior esquerdo: maior Y, depois menor X."""
+    if not coords:
+        return coords
+    idx_max = 0
+    max_y = coords[0][1]
+    min_x_at_max_y = coords[0][0]
+    for i, (x, y) in enumerate(coords):
+        if y > max_y or (y == max_y and x < min_x_at_max_y):
+            max_y = y
+            min_x_at_max_y = x
+            idx_max = i
+    return coords[idx_max:] + coords[:idx_max]
+
+
+def ensure_clockwise(coords: list[Point]) -> list[Point]:
+    """Inverte a lista se signed_area > 0 (CCW), depois rotaciona para manter início no ponto superior esquerdo."""
+    area = signed_area(coords)
+    if area > 0:
+        coords = list(reversed(coords))
+    return rotate_to_start(coords)
+
+
+def make_vpro_safe_order(coords: list[Point]) -> list[Point]:
+    """Remove ponto final repetido, aplica ensure_clockwise e rotate_to_start."""
+    if not coords:
+        return coords
+    cleaned = list(coords)
+    if len(cleaned) > 1:
+        first, last = cleaned[0], cleaned[-1]
+        if math.hypot(last[0] - first[0], last[1] - first[1]) < 1e-9:
+            cleaned.pop()
+    return ensure_clockwise(cleaned)

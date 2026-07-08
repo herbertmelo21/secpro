@@ -1,25 +1,48 @@
 #Requires AutoHotkey v2.0
+SetTitleMatchMode(2)
 SetKeyDelay(30, 30)
 
 ; ═══════════════════════════════════════════════════════════════════════════
 ; CONFIGURAÇÃO DE NAVEGAÇÃO NO GRID
 ; ═══════════════════════════════════════════════════════════════════════════
 
-; Coordenadas do botão "+" para criar nova linha
+; ┌─────────────────────────────────────────────────────────────────────────┐
+; │ MODO 1: Navegação por CONTROLES (USE ClassNN)                          │
+; │                                                                          │
+; │ VANTAGEM: Funciona independente de cliques/mouse, mais confiável        │
+; │ DESVANTAGEM: Precisa descobrir ClassNN dos controles                    │
+; │                                                                          │
+; │ Para descobrir ClassNN:                                                 │
+; │ 1. Execute: AutoHotkey vpro_control_discovery.ahk                       │
+; │ 2. Passe mouse sobre cada controle                                      │
+; │ 3. Pressione F1 para registrar                                          │
+; │ 4. Copie o ClassNN para as constantes abaixo                            │
+; └─────────────────────────────────────────────────────────────────────────┘
+
+; USAR_CONTROL_MODE := true para usar ControlSetText/ControlClick
+; USAR_CONTROL_MODE := false para usar Send/Click (fallback)
+USAR_CONTROL_MODE := false
+
+; Título da janela VPro/SecPro (use Window Spy para verificar)
+VPRO_TITULO := "VPro"
+
+; ClassNN dos controles descobertos com vpro_control_discovery.ahk:
+; Deixe vazios para usar modo fallback (Send/Click)
+X_CELL_CLASSNN := ""      ; Ex: "Edit1", "SysListView321", etc.
+Y_CELL_CLASSNN := ""      ; Ex: "Edit2", "SysListView322", etc.
+PLUS_BUTTON_CLASSNN := "" ; Ex: "Button1", "SysButton5", etc.
+
+; Coordenadas do botão "+" para modo Click (fallback)
 PLUS_X := 38
 PLUS_Y := 137
 
-; Modo de navegação após clicar no "+":
+; Modo de navegação (fallback) após clicar no "+":
 ; "tab_tab"      → Send Tab, Tab (simples, pode falhar se grid tiver foco)
 ; "down_left"    → Send Down, Left (alternativa ao Tab)
 ; "click_x_cell" → Clica direto na célula x(m) da linha (mais preciso)
 AFTER_PLUS_MODE := "click_x_cell"
 
-; Constantes para modo "click_x_cell":
-; Use Window Spy do AutoHotkey para medir essas distâncias:
-; - X_CELL_X: posição X da célula x(m) dentro da linha
-; - X_CELL_Y_FIRST: posição Y da célula x(m) da primeira linha (após "+")
-; - ROW_HEIGHT: altura de cada linha do grid
+; Constantes para modo "click_x_cell" (fallback):
 X_CELL_X := 135
 X_CELL_Y_FIRST := 181
 ROW_HEIGHT := 19
@@ -158,63 +181,109 @@ coords := [
 ]
 
 ; ═══════════════════════════════════════════════════════════════════════════
-; USO DO SCRIPT:
+; USO DO SCRIPT
 ; ═══════════════════════════════════════════════════════════════════════════
 ;
-; 1. Abra VPro/SecPro e navegue até a tabela de coordenadas
-; 2. Clique UMA VEZ no botão "+" para criar a linha 1
-; 3. Clique na célula x(m) da linha 1
-; 4. Aperte F8 no teclado
-; 5. Aguarde o script preencher todas as 130 coordenadas
+; MODO COM CONTROLES (USE CLASSNN):
+; 1. Execute: AutoHotkey vpro_control_discovery.ahk
+; 2. Descubra ClassNN dos controles X, Y e botão "+"
+; 3. Preencha as constantes X_CELL_CLASSNN, Y_CELL_CLASSNN, PLUS_BUTTON_CLASSNN
+; 4. Ajuste USAR_CONTROL_MODE := true
+; 5. Abra VPro/SecPro
+; 6. Pressione F8
 ;
-; ═══════════════════════════════════════════════════════════════════════════
-; MODO DE NAVEGAÇÃO:
-; ═══════════════════════════════════════════════════════════════════════════
-;
-; Se o script não funcionar corretamente, mude AFTER_PLUS_MODE:
-;
-; • Use "tab_tab" se o grid responde bem a teclas Tab
-; • Use "down_left" se preferir utilizar setas do teclado
-; • Use "click_x_cell" para ser mais preciso (requer ajuste das constantes)
-;
-; Para ajustar as constantes do modo "click_x_cell":
-; 1. Abra Window Spy (AutoHotkey Tools)
-; 2. Mova o mouse sobre a célula x(m) da linha 1
-;    → Anote o valor X (será X_CELL_X)
-;    → Anote o valor Y (será X_CELL_Y_FIRST)
-; 3. Mova o mouse sobre a célula x(m) da linha 2
-;    → Calcule: ROW_HEIGHT = Y_linha2 - X_CELL_Y_FIRST
+; MODO FALLBACK (SEM CLASSNN):
+; 1. Deixe X_CELL_CLASSNN, Y_CELL_CLASSNN, PLUS_BUTTON_CLASSNN vazios
+; 2. Defina USAR_CONTROL_MODE := false
+; 3. Abra VPro/SecPro
+; 4. Clique no "+" uma vez
+; 5. Clique na célula x(m) da linha 1
+; 6. Pressione F8
 ;
 ; ═══════════════════════════════════════════════════════════════════════════
 
 F8:: {
     CoordMode("Mouse", "Window")
 
+    ; Encontra a janela do VPro/SecPro
+    vpro_hwnd := WinExist("ahk_class " . VPRO_TITULO)
+    if not vpro_hwnd {
+        MsgBox(48, "Erro", "VPro/SecPro não encontrado. Verifique o título.")
+        return
+    }
+
     for i, row in coords {
-        SendText(row[1])     ; Digita X
-        Send("{Tab}")      ; Move para Y
-        SendText(row[2])     ; Digita Y
+        x_value := row[1]
+        y_value := row[2]
 
-        if i < coords.Length {
-            Click(PLUS_X, PLUS_Y)
-            Sleep(80)
+        if USAR_CONTROL_MODE and (X_CELL_CLASSNN != "") {
+            ; ───────────────────────────────────────────────────────────
+            ; MODO COM CONTROLES (RECOMENDADO)
+            ; ───────────────────────────────────────────────────────────
 
-            ; Navega conforme modo selecionado
-            if AFTER_PLUS_MODE = "tab_tab" {
+            ; Foca a célula X
+            ControlFocus(X_CELL_CLASSNN, "ahk_id " . vpro_hwnd)
+            Sleep(20)
+
+            ; Define texto na célula X
+            ControlSetText(X_CELL_CLASSNN, x_value, "ahk_id " . vpro_hwnd)
+            Sleep(20)
+
+            ; Foca a célula Y
+            if (Y_CELL_CLASSNN != "") {
+                ControlFocus(Y_CELL_CLASSNN, "ahk_id " . vpro_hwnd)
+                Sleep(20)
+                ControlSetText(Y_CELL_CLASSNN, y_value, "ahk_id " . vpro_hwnd)
+            } else {
+                ; Fallback para Y (Tab)
                 Send("{Tab}")
-                Send("{Tab}")
+                SendText(y_value)
             }
-            else if AFTER_PLUS_MODE = "down_left" {
-                Send("{Down}")
-                Send("{Left}")
-            }
-            else if AFTER_PLUS_MODE = "click_x_cell" {
-                ; Calcula posição Y da célula x(m) para a linha i+1
-                ; Linhas de dados começam em X_CELL_Y_FIRST
-                clickY := X_CELL_Y_FIRST + (i - 1) * ROW_HEIGHT
-                Click(X_CELL_X, clickY)
+            Sleep(20)
+
+            ; Cria nova linha clicando no "+"
+            if i < coords.Length {
+                if (PLUS_BUTTON_CLASSNN != "") {
+                    ControlClick(PLUS_BUTTON_CLASSNN, "ahk_id " . vpro_hwnd)
+                } else {
+                    ; Fallback para botão "+" (Click)
+                    Click(PLUS_X, PLUS_Y)
+                }
+                Sleep(80)
+
+                ; Aguarda a nova linha ser criada
                 Sleep(50)
+            }
+        } else {
+            ; ───────────────────────────────────────────────────────────
+            ; MODO FALLBACK (Send/Click) - Sem ClassNN
+            ; ───────────────────────────────────────────────────────────
+
+            SendText(x_value)     ; Digita X
+            Send("{Tab}")       ; Move para Y
+            SendText(y_value)     ; Digita Y
+
+            if i < coords.Length {
+                Click(PLUS_X, PLUS_Y)
+                Sleep(80)
+
+                ; Navega conforme modo selecionado
+                if AFTER_PLUS_MODE = "tab_tab" {
+                    Send("{Tab}")
+                    Send("{Tab}")
+                }
+                else if AFTER_PLUS_MODE = "down_left" {
+                    Send("{Down}")
+                    Send("{Left}")
+                }
+                else if AFTER_PLUS_MODE = "click_x_cell" {
+                    clickY := X_CELL_Y_FIRST + (i - 1) * ROW_HEIGHT
+                    Click(X_CELL_X, clickY)
+                    Sleep(50)
+                }
             }
         }
     }
+
+    MsgBox(64, "Sucesso", "Preenchimento de " . coords.Length . " coordenadas concluído!")
 }

@@ -23,7 +23,18 @@ dist/
 # Diversos / SO
 *.tmp
 *.swp
+*.bak
 .DS_Store
+Thumbs.db
+*:Zone.Identifier
+.ipynb_checkpoints/
+
+# Segredos locais
+.env
+.env.*
 
 # IMPORTANTE: esta repo existe para VERSIONAR secoes.
 # Nao ignorar *.dwg, *.dxf nem *.json - sao o produto principal do repositorio.
+# .vscode/ e versionado de proposito (interpreter/tasks/launch do projeto).
+# section/DXF/*.BAK ja rastreado permanece (dado historico; *.bak so vale
+# para novos backups minusculos de editor).

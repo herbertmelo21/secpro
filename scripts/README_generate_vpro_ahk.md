@@ -53,8 +53,17 @@ Cada arquivo `.ahk` contém:
 #Requires AutoHotkey v2.0
 SetKeyDelay(30, 30)
 
+; Coordenadas do botão "+"
 PLUS_X := 38
 PLUS_Y := 137
+
+; Modo de navegação: "tab_tab", "down_left" ou "click_x_cell"
+AFTER_PLUS_MODE := "click_x_cell"
+
+; Constantes para modo "click_x_cell"
+X_CELL_X := 135
+X_CELL_Y_FIRST := 181
+ROW_HEIGHT := 19
 
 coords := [
     ["0,300", "0,000"],
@@ -71,12 +80,39 @@ F8:: {
         if i < coords.Length {
             Click(PLUS_X, PLUS_Y)
             Sleep(80)
-            Send("{Tab}")
-            Send("{Tab}")
+            
+            ; 3 modos de navegação configuráveis
+            if AFTER_PLUS_MODE = "tab_tab" {
+                Send("{Tab}")
+                Send("{Tab}")
+            }
+            else if AFTER_PLUS_MODE = "down_left" {
+                Send("{Down}")
+                Send("{Left}")
+            }
+            else if AFTER_PLUS_MODE = "click_x_cell" {
+                clickY := X_CELL_Y_FIRST + (i - 1) * ROW_HEIGHT
+                Click(X_CELL_X, clickY)
+                Sleep(50)
+            }
         }
     }
 }
 ```
+
+### Modos de Navegação
+
+O script AHK gerado oferece **3 modos configuráveis** para navegar após criar uma nova linha:
+
+| Modo | Comando | Vantagem | Desvantagem |
+|------|---------|----------|------------|
+| `"tab_tab"` | `Send("{Tab}")` x2 | Simples, rápido | Pode falhar se grid tiver foco especial |
+| `"down_left"` | `Send("{Down}")`, `Send("{Left}")` | Alternativa com setas | Menos previsível que Tab/Click |
+| `"click_x_cell"` | Clica direto na célula | ⭐ **Mais robusto e preciso** | Requer calibração com Window Spy |
+
+**Modo padrão**: `"click_x_cell"` (recomendado)
+
+Se o script não funcionar bem, edite `AFTER_PLUS_MODE` no arquivo `.ahk` e tente outro modo.
 
 ## Como usar o script AHK no VPro/SecPro
 
@@ -174,10 +210,33 @@ Arquivos AHK gerados em: /home/user/projects/secpro/section/ahk
 - Verifique a unidade do DXF original (`$INSUNITS` nos DXF)
 - A normalização assume que as coordenadas estão em metros
 
-### Clique no "+" não funciona
-- Use Window Spy para ajustar `PLUS_X` e `PLUS_Y`
-- Aumente `SetKeyDelay(30, 30)` se o VPro não conseguir acompanhar a digitação
-- Aumente `Sleep(80)` se o clique no "+" não funcionar
+### Script AHK não funciona corretamente
+
+#### Problema: Clique no "+" não acerta a posição
+1. Use Window Spy do AutoHotkey para encontrar as coordenadas exatas
+2. Edite `PLUS_X` e `PLUS_Y` no arquivo `.ahk`
+3. Tente novamente pressionando F8
+
+#### Problema: Navegação falhando após criar linha
+1. Tente mudar `AFTER_PLUS_MODE`:
+   - Padrão: `"click_x_cell"` (mais preciso)
+   - Alternativa 1: `"tab_tab"` (usa Tab)
+   - Alternativa 2: `"down_left"` (usa setas)
+
+2. Se escolher `"click_x_cell"`, calibre as constantes com Window Spy:
+   - `X_CELL_X`: posição X da célula x(m)
+   - `X_CELL_Y_FIRST`: posição Y da primeira linha
+   - `ROW_HEIGHT`: altura de cada linha (diference entre Y de linhas consecutivas)
+
+#### Problema: Digitação muito rápida ou lenta
+- Aumente `SetKeyDelay(30, 30)` se o VPro não conseguir acompanhar
+- Diminua se parecer lento demais
+- Exemplo: `SetKeyDelay(50, 50)` para mais lento
+
+#### Problema: Clique no "+" muito lento ou rápido
+- Edite `Sleep(80)` após `Click(PLUS_X, PLUS_Y)`
+- Aumente para 150-200ms se o grid não responder rápido o suficiente
+- Diminua para 50ms se parecer muito lento
 
 ## Histórico
 

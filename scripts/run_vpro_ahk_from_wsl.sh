@@ -30,6 +30,7 @@ CANDIDATES=(
   "/mnt/c/Program Files/AutoHotkey/v2/AutoHotkey64.exe"
   "/mnt/c/Program Files/AutoHotkey/AutoHotkey64.exe"
   "/mnt/c/Program Files/AutoHotkey/AutoHotkey.exe"
+  "/mnt/c/Users/hcmelo/AppData/Local/Programs/AutoHotkey/UX/AutoHotkeyUX.exe"
 )
 
 AHK_EXE=""

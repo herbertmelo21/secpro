@@ -212,31 +212,52 @@ def signed_area(coords: list[Point]) -> float:
     return polygon_area(coords)
 
 
-def rotate_to_start(coords: list[Point]) -> list[Point]:
-    """Rotaciona a lista para começar no ponto superior esquerdo: maior Y, depois menor X."""
+def rotate_to_start(coords: list[Point], y_tol: float = 0.0) -> list[Point]:
+    """Rotaciona a lista para começar no ponto superior esquerdo: maior Y, depois menor X.
+
+    `y_tol` define a banda de empate em Y: todos os pontos com
+    y >= max_y - y_tol sao candidatos, e entre eles vence o de menor X.
+    Com y_tol=0.0 (padrao historico) o empate exige igualdade EXATA de
+    float - em geometria real (coordenadas com ruido de ~1e-7 vindas do
+    DWG) isso faz a escolha cair em qualquer canto cujo Y seja
+    microscopicamente maior (ex.: o canto superior DIREITO da LA25).
+    Para uma face superior nominalmente plana, use uma banda pequena
+    proporcional a altura da secao (ex.: 1e-3 * altura) para obter o
+    canto superior esquerdo de verdade.
+    """
     if not coords:
         return coords
-    idx_max = 0
-    max_y = coords[0][1]
-    min_x_at_max_y = coords[0][0]
+    max_y = max(y for _x, y in coords)
+    idx_best: int | None = None
     for i, (x, y) in enumerate(coords):
-        if y > max_y or (y == max_y and x < min_x_at_max_y):
-            max_y = y
-            min_x_at_max_y = x
-            idx_max = i
-    return coords[idx_max:] + coords[:idx_max]
+        if y < max_y - y_tol:
+            continue
+        if idx_best is None:
+            idx_best = i
+            continue
+        bx, by = coords[idx_best]
+        if x < bx or (x == bx and y > by):
+            idx_best = i
+    assert idx_best is not None  # ha pelo menos o proprio ponto de max_y
+    return coords[idx_best:] + coords[:idx_best]
 
 
-def ensure_clockwise(coords: list[Point]) -> list[Point]:
+def ensure_clockwise(coords: list[Point], y_tol: float = 0.0) -> list[Point]:
     """Inverte a lista se signed_area > 0 (CCW), depois rotaciona para manter início no ponto superior esquerdo."""
     area = signed_area(coords)
     if area > 0:
         coords = list(reversed(coords))
-    return rotate_to_start(coords)
+    return rotate_to_start(coords, y_tol=y_tol)
 
 
-def make_vpro_safe_order(coords: list[Point]) -> list[Point]:
-    """Remove ponto final repetido, aplica ensure_clockwise e rotate_to_start."""
+def make_vpro_safe_order(coords: list[Point], y_tol: float = 0.0) -> list[Point]:
+    """Remove ponto final repetido, aplica ensure_clockwise e rotate_to_start.
+
+    IMPORTANTE: esta funcao NAO reordena pontos por criterio geometrico
+    (centroide/angulo) - ela preserva a caminhada original da entidade
+    (incluindo os canais dos alveolos), apenas normalizando sentido
+    (horario) e ponto inicial (superior esquerdo, ver rotate_to_start).
+    """
     if not coords:
         return coords
     cleaned = list(coords)
@@ -244,4 +265,4 @@ def make_vpro_safe_order(coords: list[Point]) -> list[Point]:
         first, last = cleaned[0], cleaned[-1]
         if math.hypot(last[0] - first[0], last[1] - first[1]) < 1e-9:
             cleaned.pop()
-    return ensure_clockwise(cleaned)
+    return ensure_clockwise(cleaned, y_tol=y_tol)

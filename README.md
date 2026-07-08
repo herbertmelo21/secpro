@@ -16,13 +16,24 @@ depois sao consumidos por outros fluxos.
 │   ├── DXF/       # DXF gerado/validado (aceito pelo VPRO)
 │   ├── json/      # JSON intermediario (saida de `dwgread -O JSON` ou derivado)
 │   ├── reports/   # relatorios .md de conversao/validacao
-│   └── preview/   # PNG/SVG de conferencia visual
+│   ├── preview/   # PNG/SVG de conferencia visual
+│   └── ahk/       # scripts AutoHotkey historicos por secao
+├── outputs/                 # entregaveis da rodada VPRO-safe ordenada
+│   ├── dxf/                 # DXF R12 final (copia canonica em section/DXF/)
+│   ├── previews/            # PNG/SVG da ordem de desenho (setas de sentido)
+│   ├── autohotkey/          # .ahk gerado a partir do JSON ordenado
+│   └── <secao>_outer_ordered.json  # sequencia validada [{"i","x","y"}]
+├── docs/notes/              # DECISOES.md e RELATORIO_FINAL.md da organizacao
 ├── scripts/                 # CLI (usa a .venv do projeto)
 │   ├── convert_sections.py  # DWG -> DXF + JSON + relatorio + preview
 │   ├── validate_sections.py # valida DXF via round-trip LibreDWG + geometria
-│   ├── recover_previous_temp.py  # recupera artefatos esquecidos em /tmp
+│   ├── process_vpro_dxf.py  # JSON LibreDWG -> DXF limpo p/ VPRO (writers ezdxf)
+│   ├── geometry_vpro_safe.py    # export ordenado + validacao por grafo de arestas
+│   ├── export_autohotkey.py     # JSON ordenado -> AutoHotkey v2 (F8/Esc/log)
+│   ├── recover_previous_temp.py # recupera artefatos esquecidos em /tmp
 │   └── libredwg_tools.py    # localizacao/diagnostico dos binarios LibreDWG
-├── src/section_pipeline/    # pacote Python reutilizavel (geometria, io, libredwg, validacao)
+├── src/section_pipeline/    # pacote Python reutilizavel
+│   └── (geometry, io, libredwg, validation, walk = grafo/continuidade)
 ├── .vscode/                 # interpreter, tasks e launch configs
 └── .claude/CLAUDE.md        # regras permanentes para trabalho assistido por IA nesta repo
 ```
@@ -97,3 +108,24 @@ python scripts/recover_previous_temp.py
 python scripts/convert_sections.py
 python scripts/validate_sections.py
 ```
+
+## Export VPRO-safe ordenado (caminhada continua)
+
+A LWPOLYLINE das secoes alveolares e UMA caminhada continua pela borda:
+os alveolos sao percorridos por dentro atraves de um canal estreito
+("furinho") que os liga a borda externa. Esse canal e intencional e
+NUNCA deve ser fechado - o VPRO so aceita a secao como uma unica
+poligonal caminhavel, sem circulos/loops internos independentes.
+
+```bash
+# DXF R12 (1 POLYLINE fechada) + JSON ordenado + previews, com validacao
+# por grafo de arestas (continuidade, self-intersection, canal preservado):
+.venv/bin/python scripts/geometry_vpro_safe.py --force
+
+# AutoHotkey v2 para digitar a sequencia no VPro (F8 inicia, Esc aborta):
+.venv/bin/python scripts/export_autohotkey.py --force
+bash scripts/run_vpro_ahk_from_wsl.sh outputs/autohotkey/LA25_draw_polyline.ahk
+```
+
+Relatorio: `section/reports/LA25_vpro_safe_ordered_report.md`.
+Decisoes e pendencias: `docs/notes/DECISOES.md` e `docs/notes/RELATORIO_FINAL.md`.

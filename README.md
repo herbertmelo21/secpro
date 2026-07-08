@@ -127,5 +127,21 @@ poligonal caminhavel, sem circulos/loops internos independentes.
 bash scripts/run_vpro_ahk_from_wsl.sh outputs/autohotkey/LA25_draw_polyline.ahk
 ```
 
-Relatorio: `section/reports/LA25_vpro_safe_ordered_report.md`.
+### Variante simplificada (menos pontos, propriedades preservadas)
+
+Rediscretiza os arcos dos alveolos (com compensacao de raio) e so aceita o
+resultado se os erros de area (<=0.1%) e de Ix/Iy (<=0.2%) contra a polilinha
+densa passarem - senao escala circle-points automaticamente (24-32-48-64).
+LA25: 1030 -> 190 pontos (-81,6%), erro de area 0,010%.
+
+```bash
+.venv/bin/python scripts/geometry_vpro_safe.py --simplify --force
+.venv/bin/python scripts/export_autohotkey.py --force \
+  --input-json outputs/LA25_outer_ordered_simplified.json \
+  --output outputs/autohotkey/LA25_draw_polyline_simplified.ahk
+bash scripts/run_vpro_ahk_from_wsl.sh outputs/autohotkey/LA25_draw_polyline_simplified.ahk
+```
+
+Relatorios: `section/reports/LA25_vpro_safe_ordered_report.md` e
+`section/reports/LA25_simplification_report.md`.
 Decisoes e pendencias: `docs/notes/DECISOES.md` e `docs/notes/RELATORIO_FINAL.md`.

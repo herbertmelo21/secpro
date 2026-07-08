@@ -120,7 +120,38 @@ arredondamento; o gerador remove a linha duplicada (1030 → 1029 linhas
 + fechamento) para não digitar segmento de comprimento zero no VPro.
 `--decimals 4` preserva todos, se o VPro aceitar.
 
-## 10. `*.BAK` rastreado
+## 10. Simplificação (--simplify): rediscretização compensada, não RDP cego
+
+Pedido: reduzir pontos mantendo área/inércia. Como a fonte primária tem
+os alvéolos como **arcos de bulge verdadeiros** (descoberta relevante:
+cada alvéolo é UM arco de 359,33°/bulge≈340 entre os topos do canal a
+1 mm, pareado com um segmento degenerado de corda zero e 0,67° — índices
+1/6/11/16 da fonte, os mesmos "pontos coincidentes" que o
+`validate_sections` aponta no `LA25.dxf` bruto), a redução é feita
+rediscretizando cada arco na ordem da entidade, e não detectando
+"trechos quase circulares" numericamente na polilinha densa.
+
+Decisões técnicas:
+- **Compensação de raio nos pontos interiores** (extremidades fixas):
+  polígono inscrito subestima a área do alvéolo em ~6,6/n² (0,64% com
+  n=32), o que sozinho estoura o limite de 0,1% de área e forçaria
+  n=64. Com a compensação (área do setor exata em forma fechada,
+  desvio radial ~0,3 mm) o erro de área da seção cai para 0,010% já
+  com 32 pontos. Clamp de segurança: se r'/r > 1,05 o arco fica
+  inscrito e os portões de propriedades decidem.
+- **RDP topology-safe com tolerância 1e-6** funciona como guarda (nunca
+  remove âncoras; rejeita resultado com self-intersection); a redução
+  real vem dos arcos. `simplify_collinear` usa critério E (ângulo ≤ 1°
+  E distância à corda ≤ 1 µm) — deliberadamente conservador.
+- **Nomes separados** (`*_simplified.*`): a variante densa continua
+  disponível; nada é sobrescrito silenciosamente. O AHK recomendado
+  passa a ser `outputs/autohotkey/LA25_draw_polyline_simplified.ahk`
+  (190 linhas ≈ 2 min de digitação, vs 1030 ≈ 13 min — e o modo
+  fallback `click_x_cell` sofre com grids longos).
+- Se nenhuma resolução da escada (24→32→48→64) passar nos portões,
+  o script não escreve saída nenhuma e retorna erro.
+
+## 11. `*.BAK` rastreado
 
 `section/DXF/LA25_vpro_slots_r12_20gon_5mm_bare.BAK` continua rastreado
 (dado histórico pré-existente; regra: não apagar dados sem certeza).

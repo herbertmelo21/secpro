@@ -117,3 +117,27 @@ Relatório completo: `section/reports/LA25_vpro_safe_ordered_report.md`.
 4. `validation_summary.md` marca FALHOU para arquivos R12 por limitação
    conhecida do LibreDWG (`ERROR: iconv` benigno) — não é regressão;
    ver `docs/notes/DECISOES.md` §6.
+
+## Adendo — 2ª rodada (mesma data): simplificação com validação seccional
+
+Nova etapa `--simplify` no gerador (ver `docs/notes/DECISOES.md` §10):
+rediscretização dos arcos dos alvéolos com compensação de raio, âncoras
+(cantos/canais) intocadas, portões de aceite por propriedades.
+
+Resultado LA25 (circle-points=32, 1ª tentativa da escada):
+
+- 1030 → **190 pontos** (−81,6%), ~32 pontos por alvéolo;
+- erro de área **0,0102%** (limite 0,10%), Ix **0,0007%**, Iy **0,0084%**
+  (limite 0,20%); Cy desloca 1,1e-5 m;
+- topologia idêntica (1 loop global, sem cordas, canal de 1,000 mm,
+  início superior esquerdo, horário);
+- novos entregáveis: `outputs/dxf/LA25_vpro_safe_simplified.dxf`,
+  `outputs/LA25_outer_ordered_simplified.json`,
+  `outputs/autohotkey/LA25_draw_polyline_simplified.ahk` (**recomendado**
+  para digitação: ~2 min vs ~13 min do denso),
+  `section/reports/LA25_simplification_report.md` + PNG numerado + CSV.
+
+Validação manual pendente: importar o DXF simplificado no VPro e/ou
+rodar o AHK simplificado; conferir no VPro se A/Ix/Iy batem com o
+relatório (valores de referência na tabela do
+`LA25_simplification_report.md`).

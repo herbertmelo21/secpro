@@ -217,7 +217,7 @@ F8:: {
 
         x_value := row[1]
         y_value := row[2]
-        ToolTip("VPro polilinha: ponto " . i . " / " . total . "  (" . x_value . " ; " . y_value . ")  -  Esc aborta")
+        ToolTip("Ponto " . i . " de " . total . ": " . x_value . " , " . y_value . " - Esc cancela")
 
         if (USAR_CONTROL_MODE and X_CELL_CLASSNN != "") {
             ; ── modo controle (recomendado) ─────────────────────────────

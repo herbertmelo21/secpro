@@ -35,7 +35,14 @@ X_CELL_CLASSNN := ""              ; ex.: "Edit1"
 Y_CELL_CLASSNN := ""              ; ex.: "Edit2"
 PLUS_BUTTON_CLASSNN := ""         ; ex.: "Button1"
 
-; Modo fallback (Send/Click) - constantes herdadas de section/ahk/LA25.ahk
+; Modo precreate (recomendado para grids longos; evita perder ponto)
+PRECREATE_ROWS := true
+ROW_CREATE_DELAY_MS := 700  ; delay entre cliques do "+" durante phase 1
+TYPE_DELAY_MS := 300        ; delay ao digitar x/y
+AFTER_Y_DELAY_MS := 500     ; delay apos y antes de Tab para proxima linha
+
+; Modo fallback legado (Send/Click) - constantes herdadas de section/ahk/LA25.ahk
+; Nao recomendado para grids > ~50 linhas.
 PLUS_X := 38
 PLUS_Y := 137
 AFTER_PLUS_MODE := "click_x_cell" ; "tab_tab" | "down_left" | "click_x_cell"
@@ -1106,6 +1113,9 @@ Esc:: {
     ExitApp()
 }
 
+; Ctrl+Alt+Q tambem encerra (tecla rapida alternativa)
+^!q:: ExitApp()
+
 ; Garante que a janela do VPro existe e esta ativa; tenta reativar UMA vez.
 ; Retorna true se pode continuar; false = parar (sem cliques as cegas).
 JanelaOk(vpro_hwnd) {
@@ -1138,9 +1148,66 @@ F8:: {
     Sleep(1000)
 
     total := coords.Length
-    Log("Inicio: " . total . " pontos, a partir do indice " . INICIO_EM
-        . " (delay " . POINT_DELAY_MS . " ms)")
+    Log("Inicio: " . total . " pontos, a partir do indice " . INICIO_EM)
 
+    ; ── Estrategia PRECREATE + FILL (recomendado para grid longo) ─────────────
+    if (PRECREATE_ROWS and !USAR_CONTROL_MODE) {
+        Log("FASE 1: criando " . (total - 1) . " linhas vazias...")
+        for i := 2 to total {
+            if g_abort
+                return
+            if !JanelaOk(vpro_hwnd) {
+                AbortarExecucao("Janela perdeu foco durante criacao de linhas.", i - 1)
+                return
+            }
+            ToolTip("Criando linha " . i . " de " . total)
+            Click(PLUS_X, PLUS_Y)
+            Sleep(ROW_CREATE_DELAY_MS)
+        }
+        Log("FASE 1 concluida. Preenchendo valores...")
+
+        ; Clicar na celula x(m) da linha 1 para comecar o preenchimento
+        Click(X_CELL_X, X_CELL_Y_FIRST)
+        Sleep(300)
+
+        Log("FASE 2: preenchendo pontos...")
+        for i, row in coords {
+            if (i < INICIO_EM)
+                continue
+            if g_abort
+                return
+
+            if !JanelaOk(vpro_hwnd) {
+                AbortarExecucao("Janela perdeu foco durante preenchimento.", i - 1)
+                return
+            }
+
+            x_value := row[1]
+            y_value := row[2]
+            ToolTip("Preenchendo ponto " . i . " de " . total . ": " . x_value . " , " . y_value)
+
+            ; Digita x, Tab, y, Tab (Tab move para x da proxima linha)
+            SendText(x_value)
+            Sleep(TYPE_DELAY_MS)
+            Send("{Tab}")
+            Sleep(TYPE_DELAY_MS)
+            SendText(y_value)
+            Sleep(AFTER_Y_DELAY_MS)
+            Send("{Tab}")
+            Sleep(TYPE_DELAY_MS)
+
+            if (Mod(i, 25) = 0)
+                Log("progresso: " . i . " / " . total)
+        }
+
+        ToolTip()
+        Log("FASE 2 concluida: " . total . " pontos preenchidos.")
+        MsgBox("Preenchimento de " . total . " coordenadas concluido com sucesso!", "Sucesso", 64)
+        return
+    }
+
+    ; ── Estrategia legada (ponto a ponto com criacao de linha) ────────────────
+    Log("Usando modo legado (ponto a ponto)...")
     for i, row in coords {
         if (i < INICIO_EM)
             continue
@@ -1158,7 +1225,7 @@ F8:: {
         ToolTip("Ponto " . i . " de " . total . ": " . x_value . " , " . y_value . " - Esc cancela")
 
         if (USAR_CONTROL_MODE and X_CELL_CLASSNN != "") {
-            ; ── modo controle (recomendado) ─────────────────────────────
+            ; ── modo controle ─────────────────────────────
             ControlFocus(X_CELL_CLASSNN, "ahk_id " . vpro_hwnd)
             Sleep(POINT_DELAY_MS // 3)
             ControlSetText(X_CELL_CLASSNN, x_value, "ahk_id " . vpro_hwnd)
@@ -1180,7 +1247,7 @@ F8:: {
                 Sleep(POINT_DELAY_MS * 2)
             }
         } else {
-            ; ── modo fallback (Send/Click) ──────────────────────────────
+            ; ── modo fallback legado ──────────────────────────────
             SendText(x_value)
             Sleep(POINT_DELAY_MS)
             Send("{Tab}")

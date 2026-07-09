@@ -33,8 +33,21 @@ Thumbs.db
 .env
 .env.*
 
+# Gerados/scratch (auditoria 2026-07-09 - ver docs/notes/FILE_CLASSIFICATION.md)
+# Regra do Git: ignorar so vale para arquivos NOVOS; os ja rastreados em
+# outputs/ e section/reports/*_roundtrip.* continuam versionados ate uma
+# rodada futura de "git rm --cached" (apos validar o AHK de 150 pts no VPRO).
+outputs/
+audit_pack/
+*.BAK
+*_roundtrip.*
+
 # IMPORTANTE: esta repo existe para VERSIONAR secoes.
-# Nao ignorar *.dwg, *.dxf nem *.json - sao o produto principal do repositorio.
+# Nao ignorar *.dwg, *.dxf nem *.json em section/ - fonte e artefatos finais.
+# O JSON fonte do AHK vive versionado em section/json/ (copia canonica);
+# outputs/ e apenas scratch de build regeneravel.
+# Previews DOCUMENTAIS (section/preview/, section/reports/*.png) ficam
+# versionados; previews de scratch caem na regra de outputs/.
 # .vscode/ e versionado de proposito (interpreter/tasks/launch do projeto).
-# section/DXF/*.BAK ja rastreado permanece (dado historico; *.bak so vale
-# para novos backups minusculos de editor).
+# section/DXF/*.BAK ja rastreado permanece (dado historico; *.bak/*.BAK so
+# valem para novos backups).

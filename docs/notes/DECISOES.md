@@ -157,3 +157,35 @@ Decisões técnicas:
 (dado histórico pré-existente; regra: não apagar dados sem certeza).
 `*.bak` minúsculo entrou no `.gitignore` apenas para novos temporários
 de editor.
+
+## 12. Auditoria de 2026-07-09: rota AHK é a operacional
+
+Com o questionário respondido (`docs/notes/QUESTIONS_FOR_HERBERT.md`), o
+objetivo real ficou explícito: **laboratório pessoal de caracterização do
+VPRO**, cuja saída operacional é o **AHK** (não o DXF). Decisões:
+
+- README reescrito separando rota AHK (operacional) de rota DXF
+  (experimental, importação nunca confirmada no VPRO); versão anterior
+  preservada no histórico do Git.
+- Limite prático adotado: **≤160 pontos** (teto observado ~180 com 190
+  linhas em 2 runs — evidência no log do AHK, transcrita em
+  `BLACKBOX_FINDINGS.md`). Artefato atual: 150 pontos, validação manual
+  pendente.
+- `docs/notes/BLACKBOX_FINDINGS.md` criado como caderno de laboratório
+  (status CONFIRMADO/HIPÓTESE/NÃO CARACTERIZADO/PENDENTE por achado).
+- `docs/notes/FILE_CLASSIFICATION.md` criado (KEEP_*/GENERATED_IGNORE/
+  ARCHIVE_EXPERIMENT/DELETE_CANDIDATE). **Nada foi deletado nem
+  untrackeado nesta rodada**; `git rm --cached` de `outputs/` e dos
+  roundtrips rastreados fica para depois da validação do AHK de 150.
+- `.gitignore` passou a ignorar `outputs/`, `audit_pack/`, `*.BAK` e
+  `*_roundtrip.*` para arquivos NOVOS (os já rastreados permanecem).
+- JSON fonte do AHK copiado para casa versionada:
+  `section/json/LA25_outer_ordered_160.json` (byte-idêntico ao de
+  `outputs/`; reprodutibilidade do AHK comprovada por diff vazio).
+- Questionário respondido versionado com duas edições declaradas:
+  correção do ano no rodapé (2025→2026, erro de digitação) e resposta
+  pessoal de I.4 mantida apenas na cópia local (`audit_pack/`) por ser
+  auto-revelação sensível — o remoto GitHub pode ser público; reverter é
+  trivial se o Herbert preferir o texto completo versionado.
+- AHK histórico manual (pré-`6a802fe`) documentado como recuperável via
+  `git show 6a802fe~1:section/ahk/LA25.ahk`.

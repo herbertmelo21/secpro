@@ -141,3 +141,22 @@ Validação manual pendente: importar o DXF simplificado no VPro e/ou
 rodar o AHK simplificado; conferir no VPro se A/Ix/Iy batem com o
 relatório (valores de referência na tabela do
 `LA25_simplification_report.md`).
+
+## Adendo — 3ª rodada (2026-07-09): VPro real, limite de pontos e auditoria
+
+Experimentos no VPro real (cronologia completa em
+`docs/notes/BLACKBOX_FINDINGS.md` §4):
+
+- Modo legado perdia/embaralhava pontos; **Tab embaralha x/y** no grid;
+  solução validada: **2 fases** (criar todas as linhas com `+` a ~700 ms,
+  depois preencher com setas Right/Down/Left).
+- Com 190 linhas, a tabela **parou de aceitar valores ~ponto 180** (2 runs
+  completos reproduziram). Decisão: `--max-vpro-points 160` → artefato
+  operacional `section/ahk/LA25.ahk` com **150 pontos** (erros ≤0,01%).
+- Correções de template AHK v2: sintaxe `Loop`, colisão função/variável,
+  string de ToolTip, hotkey `Ctrl+Alt+Q`.
+- Auditoria conservadora: README realinhado à rota AHK, questionário de
+  requisitos versionado, `BLACKBOX_FINDINGS.md` e `FILE_CLASSIFICATION.md`
+  criados, `.gitignore` com política de gerados. Nada deletado.
+- **Pendente**: rodar `section/ahk/LA25.ahk` (150 pts) no VPro e conferir
+  visualmente — nunca foi executado (sem `section/ahk/LA25.log`).

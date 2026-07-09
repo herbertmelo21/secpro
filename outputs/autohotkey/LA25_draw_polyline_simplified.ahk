@@ -239,16 +239,16 @@ coords := [
 ]
 
 ; ── Estado global ────────────────────────────────────────────────────────────
-global abortar := false
+global g_abort := false
 
 Log(msg) {
     global LOG_FILE
     FileAppend(FormatTime(A_Now, "yyyy-MM-dd HH:mm:ss") . "  " . msg . "`n", LOG_FILE)
 }
 
-Abortar(motivo, ultimo) {
-    global abortar
-    abortar := true
+AbortarExecucao(motivo, ultimo) {
+    global g_abort
+    g_abort := true
     ToolTip()
     Log("ABORTADO: " . motivo . " (ultimo ponto concluido: " . ultimo . ")")
     MsgBox(motivo . "`n`nUltimo ponto concluido: " . ultimo
@@ -258,8 +258,8 @@ Abortar(motivo, ultimo) {
 
 ; Esc aborta a qualquer momento (inclusive durante Sleep)
 Esc:: {
-    global abortar
-    abortar := true
+    global g_abort
+    g_abort := true
     ToolTip()
     Log("ABORTADO: Esc pressionado pelo usuario")
     MsgBox("Automacao abortada pelo usuario (Esc).", "Abortado", 48)
@@ -278,8 +278,8 @@ JanelaOk(vpro_hwnd) {
 }
 
 F8:: {
-    global abortar
-    abortar := false
+    global g_abort
+    g_abort := false
     CoordMode("Mouse", "Window")
 
     vpro_hwnd := WinExist(VPRO_TITULO)
@@ -304,12 +304,12 @@ F8:: {
     for i, row in coords {
         if (i < INICIO_EM)
             continue
-        if abortar
+        if g_abort
             return
 
         ; nunca continuar sem a janela do VPro em foco
         if !JanelaOk(vpro_hwnd) {
-            Abortar("Janela do VPro fechada ou sem foco (nao recuperado apos 1 tentativa).", i - 1)
+            AbortarExecucao("Janela do VPro fechada ou sem foco (nao recuperado apos 1 tentativa).", i - 1)
             return
         }
 
@@ -351,7 +351,7 @@ F8:: {
                 Click(PLUS_X, PLUS_Y)
                 Sleep(POINT_DELAY_MS * 2)
                 if !JanelaOk(vpro_hwnd) {
-                    Abortar("Janela perdeu o foco apos clicar no '+'.", i)
+                    AbortarExecucao("Janela perdeu o foco apos clicar no '+'.", i)
                     return
                 }
                 if (AFTER_PLUS_MODE = "tab_tab") {

@@ -1,174 +1,58 @@
 #Requires AutoHotkey v2.0
+; ═══════════════════════════════════════════════════════════════════════════
+; LA25 - digita a polilinha VPRO-safe no VPro/SecPro, ponto a ponto,
+; NA ORDEM VALIDADA (caminhada continua; alveolos ligados por canal - NAO
+; fechados como loops independentes). Gerado por scripts/export_autohotkey.py
+; a partir de outputs/LA25_outer_ordered_160.json - nao editar os pontos a mao.
+;
+; USO:
+;   1. Abra o VPro na tela "Seção poligonal" (grid de coordenadas visivel).
+;   2. Modo controle (recomendado): descubra os ClassNN com
+;      scripts/vpro_control_discovery.ahk e preencha as constantes abaixo.
+;      Modo fallback: clique no "+" uma vez e depois na celula x(m) da
+;      linha 1 antes de comecar.
+;   3. F8 inicia. Esc ABORTA imediatamente a qualquer momento.
+;   4. Progresso: ToolTip no canto da tela + log em LA25.log
+;      (mesma pasta deste script). Em caso de aborto, o log diz o ultimo
+;      ponto concluido - ajuste INICIO_EM para retomar (modo controle).
+;
+; AVISO (modo fallback "click_x_cell"): a posicao da celula e estimada por
+; X_CELL_Y_FIRST + i*ROW_HEIGHT e SO vale enquanto a linha alvo estiver
+; visivel sem rolagem. Para 150 linhas, prefira o modo controle.
+; ═══════════════════════════════════════════════════════════════════════════
+
 SetTitleMatchMode(2)
 SetKeyDelay(100, 100)
 
-; ═══════════════════════════════════════════════════════════════════════════
-; CONFIGURAÇÃO DE NAVEGAÇÃO NO GRID
-; ═══════════════════════════════════════════════════════════════════════════
-
-; ┌─────────────────────────────────────────────────────────────────────────┐
-; │ MODO 1: Navegação por CONTROLES (USE ClassNN)                          │
-; │                                                                          │
-; │ VANTAGEM: Funciona independente de cliques/mouse, mais confiável        │
-; │ DESVANTAGEM: Precisa descobrir ClassNN dos controles                    │
-; │                                                                          │
-; │ Para descobrir ClassNN:                                                 │
-; │ 1. Execute: AutoHotkey vpro_control_discovery.ahk                       │
-; │ 2. Passe mouse sobre cada controle                                      │
-; │ 3. Pressione F1 para registrar                                          │
-; │ 4. Copie o ClassNN para as constantes abaixo                            │
-; └─────────────────────────────────────────────────────────────────────────┘
-
-; USAR_CONTROL_MODE := true para usar ControlSetText/ControlClick
-; USAR_CONTROL_MODE := false para usar Send/Click (fallback)
-USAR_CONTROL_MODE := false
-
-; Título da janela VPro/SecPro (use Window Spy para verificar)
+; ── Configuracao ─────────────────────────────────────────────────────────────
 VPRO_TITULO := "Seção poligonal"
+POINT_DELAY_MS := 150       ; pausa base entre acoes (conservador)
+INICIO_EM := 1                    ; 1 = do comeco; >1 retoma apos aborto
 
-; ClassNN dos controles descobertos com vpro_control_discovery.ahk:
-; Deixe vazios para usar modo fallback (Send/Click)
-X_CELL_CLASSNN := ""      ; Ex: "Edit1", "SysListView321", etc.
-Y_CELL_CLASSNN := ""      ; Ex: "Edit2", "SysListView322", etc.
-PLUS_BUTTON_CLASSNN := "" ; Ex: "Button1", "SysButton5", etc.
+; Modo controle (recomendado): preencha com vpro_control_discovery.ahk
+USAR_CONTROL_MODE := false
+X_CELL_CLASSNN := ""              ; ex.: "Edit1"
+Y_CELL_CLASSNN := ""              ; ex.: "Edit2"
+PLUS_BUTTON_CLASSNN := ""         ; ex.: "Button1"
 
-; Coordenadas do botão "+" para modo Click (fallback)
+; Modo precreate (recomendado para grids longos; evita perder ponto)
+PRECREATE_ROWS := true
+ROW_CREATE_DELAY_MS := 700  ; delay entre cliques do "+" durante phase 1
+TYPE_DELAY_MS := 300        ; delay ao digitar x/y
+AFTER_Y_DELAY_MS := 500     ; delay apos y antes de Tab para proxima linha
+
+; Modo fallback legado (Send/Click) - constantes herdadas de section/ahk/LA25.ahk
+; Nao recomendado para grids > ~50 linhas.
 PLUS_X := 38
 PLUS_Y := 137
-
-; Modo de navegação (fallback) após clicar no "+":
-; "tab_tab"      → Send Tab, Tab (simples, pode falhar se grid tiver foco)
-; "down_left"    → Send Down, Left (alternativa ao Tab)
-; "click_x_cell" → Clica direto na célula x(m) da linha (mais preciso)
-AFTER_PLUS_MODE := "click_x_cell"
-
-; Constantes para modo "click_x_cell" (fallback):
+AFTER_PLUS_MODE := "click_x_cell" ; "tab_tab" | "down_left" | "click_x_cell"
 X_CELL_X := 135
 X_CELL_Y_FIRST := 181
 ROW_HEIGHT := 19
 
+LOG_FILE := A_ScriptDir . "\LA25.log"
+
 coords := [
-    ["0,441", "0,000"],
-    ["0,441", "0,040"],
-    ["0,467", "0,044"],
-    ["0,490", "0,057"],
-    ["0,509", "0,075"],
-    ["0,521", "0,099"],
-    ["0,525", "0,125"],
-    ["0,521", "0,152"],
-    ["0,509", "0,175"],
-    ["0,490", "0,194"],
-    ["0,466", "0,206"],
-    ["0,440", "0,210"],
-    ["0,414", "0,206"],
-    ["0,390", "0,194"],
-    ["0,371", "0,175"],
-    ["0,359", "0,152"],
-    ["0,355", "0,125"],
-    ["0,359", "0,099"],
-    ["0,371", "0,075"],
-    ["0,390", "0,057"],
-    ["0,413", "0,044"],
-    ["0,440", "0,040"],
-    ["0,440", "0,000"],
-    ["0,220", "0,000"],
-    ["0,220", "0,040"],
-    ["0,247", "0,044"],
-    ["0,270", "0,057"],
-    ["0,289", "0,075"],
-    ["0,301", "0,099"],
-    ["0,305", "0,125"],
-    ["0,301", "0,152"],
-    ["0,289", "0,175"],
-    ["0,270", "0,194"],
-    ["0,246", "0,206"],
-    ["0,220", "0,210"],
-    ["0,194", "0,206"],
-    ["0,170", "0,194"],
-    ["0,151", "0,175"],
-    ["0,139", "0,152"],
-    ["0,135", "0,125"],
-    ["0,139", "0,099"],
-    ["0,151", "0,075"],
-    ["0,170", "0,057"],
-    ["0,193", "0,044"],
-    ["0,219", "0,040"],
-    ["0,219", "0,000"],
-    ["0,000", "0,000"],
-    ["0,000", "0,040"],
-    ["0,027", "0,044"],
-    ["0,050", "0,057"],
-    ["0,069", "0,075"],
-    ["0,081", "0,099"],
-    ["0,085", "0,125"],
-    ["0,081", "0,152"],
-    ["0,069", "0,175"],
-    ["0,050", "0,194"],
-    ["0,026", "0,206"],
-    ["-0,000", "0,210"],
-    ["-0,026", "0,206"],
-    ["-0,050", "0,194"],
-    ["-0,069", "0,175"],
-    ["-0,081", "0,152"],
-    ["-0,085", "0,125"],
-    ["-0,081", "0,099"],
-    ["-0,069", "0,075"],
-    ["-0,050", "0,057"],
-    ["-0,027", "0,044"],
-    ["-0,001", "0,040"],
-    ["-0,001", "0,000"],
-    ["-0,220", "0,000"],
-    ["-0,220", "0,040"],
-    ["-0,194", "0,044"],
-    ["-0,170", "0,057"],
-    ["-0,152", "0,075"],
-    ["-0,140", "0,099"],
-    ["-0,136", "0,125"],
-    ["-0,140", "0,152"],
-    ["-0,152", "0,175"],
-    ["-0,171", "0,194"],
-    ["-0,194", "0,206"],
-    ["-0,221", "0,210"],
-    ["-0,247", "0,206"],
-    ["-0,270", "0,194"],
-    ["-0,289", "0,175"],
-    ["-0,301", "0,152"],
-    ["-0,306", "0,125"],
-    ["-0,301", "0,099"],
-    ["-0,290", "0,075"],
-    ["-0,271", "0,057"],
-    ["-0,247", "0,044"],
-    ["-0,221", "0,040"],
-    ["-0,221", "0,000"],
-    ["-0,439", "0,000"],
-    ["-0,439", "0,040"],
-    ["-0,413", "0,044"],
-    ["-0,389", "0,056"],
-    ["-0,371", "0,075"],
-    ["-0,359", "0,099"],
-    ["-0,355", "0,125"],
-    ["-0,359", "0,152"],
-    ["-0,371", "0,175"],
-    ["-0,390", "0,194"],
-    ["-0,413", "0,206"],
-    ["-0,440", "0,210"],
-    ["-0,466", "0,206"],
-    ["-0,489", "0,194"],
-    ["-0,508", "0,175"],
-    ["-0,520", "0,152"],
-    ["-0,525", "0,125"],
-    ["-0,520", "0,099"],
-    ["-0,509", "0,075"],
-    ["-0,490", "0,056"],
-    ["-0,466", "0,044"],
-    ["-0,440", "0,040"],
-    ["-0,440", "0,000"],
-    ["-0,613", "0,000"],
-    ["-0,625", "0,012"],
-    ["-0,625", "0,050"],
-    ["-0,575", "0,060"],
-    ["-0,575", "0,195"],
-    ["-0,600", "0,200"],
     ["-0,600", "0,250"],
     ["0,600", "0,250"],
     ["0,600", "0,200"],
@@ -177,148 +61,353 @@ coords := [
     ["0,625", "0,050"],
     ["0,625", "0,012"],
     ["0,613", "0,000"],
-    ["0,441", "0,000"]
+    ["0,441", "0,000"],
+    ["0,441", "0,040"],
+    ["0,463", "0,043"],
+    ["0,483", "0,051"],
+    ["0,501", "0,065"],
+    ["0,514", "0,083"],
+    ["0,523", "0,103"],
+    ["0,526", "0,125"],
+    ["0,523", "0,148"],
+    ["0,514", "0,168"],
+    ["0,500", "0,186"],
+    ["0,483", "0,199"],
+    ["0,462", "0,208"],
+    ["0,440", "0,211"],
+    ["0,418", "0,208"],
+    ["0,397", "0,199"],
+    ["0,380", "0,186"],
+    ["0,366", "0,168"],
+    ["0,357", "0,148"],
+    ["0,354", "0,125"],
+    ["0,357", "0,103"],
+    ["0,366", "0,083"],
+    ["0,379", "0,065"],
+    ["0,397", "0,051"],
+    ["0,417", "0,043"],
+    ["0,440", "0,040"],
+    ["0,440", "0,000"],
+    ["0,220", "0,000"],
+    ["0,220", "0,040"],
+    ["0,243", "0,043"],
+    ["0,263", "0,051"],
+    ["0,281", "0,065"],
+    ["0,294", "0,083"],
+    ["0,303", "0,103"],
+    ["0,306", "0,125"],
+    ["0,303", "0,147"],
+    ["0,294", "0,168"],
+    ["0,280", "0,186"],
+    ["0,263", "0,199"],
+    ["0,242", "0,208"],
+    ["0,220", "0,211"],
+    ["0,198", "0,208"],
+    ["0,177", "0,199"],
+    ["0,160", "0,186"],
+    ["0,146", "0,168"],
+    ["0,137", "0,147"],
+    ["0,134", "0,125"],
+    ["0,137", "0,103"],
+    ["0,146", "0,083"],
+    ["0,159", "0,065"],
+    ["0,177", "0,051"],
+    ["0,197", "0,043"],
+    ["0,219", "0,040"],
+    ["0,219", "0,000"],
+    ["0,000", "0,000"],
+    ["0,000", "0,040"],
+    ["0,023", "0,043"],
+    ["0,043", "0,051"],
+    ["0,061", "0,065"],
+    ["0,074", "0,083"],
+    ["0,083", "0,103"],
+    ["0,086", "0,125"],
+    ["0,083", "0,147"],
+    ["0,074", "0,168"],
+    ["0,060", "0,186"],
+    ["0,043", "0,199"],
+    ["0,022", "0,208"],
+    ["-0,000", "0,211"],
+    ["-0,022", "0,208"],
+    ["-0,043", "0,199"],
+    ["-0,060", "0,186"],
+    ["-0,074", "0,168"],
+    ["-0,083", "0,147"],
+    ["-0,086", "0,125"],
+    ["-0,083", "0,103"],
+    ["-0,074", "0,083"],
+    ["-0,061", "0,065"],
+    ["-0,043", "0,051"],
+    ["-0,023", "0,043"],
+    ["-0,001", "0,040"],
+    ["-0,001", "0,000"],
+    ["-0,220", "0,000"],
+    ["-0,220", "0,040"],
+    ["-0,198", "0,043"],
+    ["-0,177", "0,051"],
+    ["-0,160", "0,065"],
+    ["-0,146", "0,083"],
+    ["-0,138", "0,103"],
+    ["-0,135", "0,125"],
+    ["-0,138", "0,147"],
+    ["-0,147", "0,168"],
+    ["-0,160", "0,186"],
+    ["-0,178", "0,199"],
+    ["-0,198", "0,208"],
+    ["-0,221", "0,211"],
+    ["-0,243", "0,208"],
+    ["-0,263", "0,199"],
+    ["-0,281", "0,186"],
+    ["-0,295", "0,168"],
+    ["-0,303", "0,147"],
+    ["-0,306", "0,125"],
+    ["-0,303", "0,103"],
+    ["-0,295", "0,083"],
+    ["-0,281", "0,065"],
+    ["-0,264", "0,051"],
+    ["-0,243", "0,043"],
+    ["-0,221", "0,040"],
+    ["-0,221", "0,000"],
+    ["-0,439", "0,000"],
+    ["-0,439", "0,040"],
+    ["-0,417", "0,043"],
+    ["-0,396", "0,051"],
+    ["-0,379", "0,065"],
+    ["-0,365", "0,083"],
+    ["-0,357", "0,103"],
+    ["-0,354", "0,125"],
+    ["-0,357", "0,147"],
+    ["-0,366", "0,168"],
+    ["-0,379", "0,186"],
+    ["-0,397", "0,199"],
+    ["-0,417", "0,208"],
+    ["-0,440", "0,211"],
+    ["-0,462", "0,208"],
+    ["-0,482", "0,199"],
+    ["-0,500", "0,186"],
+    ["-0,514", "0,168"],
+    ["-0,522", "0,147"],
+    ["-0,525", "0,125"],
+    ["-0,522", "0,103"],
+    ["-0,514", "0,083"],
+    ["-0,500", "0,065"],
+    ["-0,483", "0,051"],
+    ["-0,462", "0,043"],
+    ["-0,440", "0,040"],
+    ["-0,440", "0,000"],
+    ["-0,613", "0,000"],
+    ["-0,625", "0,012"],
+    ["-0,625", "0,050"],
+    ["-0,575", "0,060"],
+    ["-0,575", "0,195"],
+    ["-0,600", "0,200"],
+    ["-0,600", "0,250"]
 ]
 
-; ═══════════════════════════════════════════════════════════════════════════
-; USO DO SCRIPT
-; ═══════════════════════════════════════════════════════════════════════════
-;
-; MODO COM CONTROLES (USE CLASSNN):
-; 1. Execute: AutoHotkey vpro_control_discovery.ahk
-; 2. Descubra ClassNN dos controles X, Y e botão "+"
-; 3. Preencha as constantes X_CELL_CLASSNN, Y_CELL_CLASSNN, PLUS_BUTTON_CLASSNN
-; 4. Ajuste USAR_CONTROL_MODE := true
-; 5. Abra VPro/SecPro
-; 6. Pressione F8
-;
-; MODO FALLBACK (SEM CLASSNN):
-; 1. Deixe X_CELL_CLASSNN, Y_CELL_CLASSNN, PLUS_BUTTON_CLASSNN vazios
-; 2. Defina USAR_CONTROL_MODE := false
-; 3. Abra VPro/SecPro
-; 4. Clique no "+" uma vez
-; 5. Clique na célula x(m) da linha 1
-; 6. Pressione F8
-;
-; ═══════════════════════════════════════════════════════════════════════════
+; ── Estado global ────────────────────────────────────────────────────────────
+global g_abort := false
+
+Log(msg) {
+    global LOG_FILE
+    FileAppend(FormatTime(A_Now, "yyyy-MM-dd HH:mm:ss") . "  " . msg . "`n", LOG_FILE)
+}
+
+AbortarExecucao(motivo, ultimo) {
+    global g_abort
+    g_abort := true
+    ToolTip()
+    Log("ABORTADO: " . motivo . " (ultimo ponto concluido: " . ultimo . ")")
+    MsgBox(motivo . "`n`nUltimo ponto concluido: " . ultimo
+        . "`nPara retomar no modo controle, ajuste INICIO_EM := " . (ultimo + 1)
+        . " e pressione F8.", "Automacao interrompida", 48)
+}
+
+; Esc aborta a qualquer momento (inclusive durante Sleep)
+Esc:: {
+    global g_abort
+    g_abort := true
+    ToolTip()
+    Log("ABORTADO: Esc pressionado pelo usuario")
+    MsgBox("Automacao abortada pelo usuario (Esc).", "Abortado", 48)
+    ExitApp()
+}
+
+; Ctrl+Alt+Q tambem encerra (tecla rapida alternativa)
+^!q:: ExitApp()
+
+; Garante que a janela do VPro existe e esta ativa; tenta reativar UMA vez.
+; Retorna true se pode continuar; false = parar (sem cliques as cegas).
+JanelaOk(vpro_hwnd) {
+    if !WinExist("ahk_id " . vpro_hwnd)
+        return false
+    if WinActive("ahk_id " . vpro_hwnd)
+        return true
+    WinActivate("ahk_id " . vpro_hwnd)
+    return WinWaitActive("ahk_id " . vpro_hwnd, , 2) != 0
+}
 
 F8:: {
-    ; CoordMode("Mouse", "Window") garante que Click() usa coordenadas relativas à janela
-    ; e não absolutas da tela. Isso é crítico para evitar cliques fora do VPro.
+    global g_abort
+    g_abort := false
     CoordMode("Mouse", "Window")
 
-    ; Encontra a janela do VPro/SecPro
     vpro_hwnd := WinExist(VPRO_TITULO)
-    if not vpro_hwnd {
-        MsgBox(48, "Erro", "VPro/SecPro não encontrado. Verifique o título.")
+    if !vpro_hwnd {
+        MsgBox("Janela '" . VPRO_TITULO . "' nao encontrada."
+            . "`nAbra o VPro na tela da secao poligonal e tente de novo.",
+            "Erro", 48)
         return
     }
 
-    ; Ativa a janela e aguarda
     WinActivate("ahk_id " . vpro_hwnd)
-    WinWaitActive("ahk_id " . vpro_hwnd, , 2)
+    if !WinWaitActive("ahk_id " . vpro_hwnd, , 2) {
+        MsgBox("Nao consegui ativar a janela do VPro.", "Erro", 48)
+        return
+    }
     Sleep(1000)
 
+    total := coords.Length
+    Log("Inicio: " . total . " pontos, a partir do indice " . INICIO_EM)
+
+    ; ── Estrategia PRECREATE + FILL (recomendado para grid longo) ─────────────
+    if (PRECREATE_ROWS and !USAR_CONTROL_MODE) {
+        Log("FASE 1: criando " . (total - 1) . " linhas vazias...")
+        Loop (total - 1) {
+            i := A_Index + 1
+            if g_abort
+                return
+            if !JanelaOk(vpro_hwnd) {
+                AbortarExecucao("Janela perdeu foco durante criacao de linhas.", i - 1)
+                return
+            }
+            ToolTip("Criando linha " . i . " de " . total)
+            Click(PLUS_X, PLUS_Y)
+            Sleep(ROW_CREATE_DELAY_MS)
+        }
+        Log("FASE 1 concluida. Preenchendo valores...")
+
+        ; Clicar na celula x(m) da linha 1 para comecar o preenchimento
+        Click(X_CELL_X, X_CELL_Y_FIRST)
+        Sleep(300)
+
+        Log("FASE 2: preenchendo pontos...")
+        for i, row in coords {
+            if (i < INICIO_EM)
+                continue
+            if g_abort
+                return
+
+            if !JanelaOk(vpro_hwnd) {
+                AbortarExecucao("Janela perdeu foco durante preenchimento.", i - 1)
+                return
+            }
+
+            x_value := row[1]
+            y_value := row[2]
+            ToolTip("Preenchendo ponto " . i . " de " . total . ": " . x_value . " , " . y_value)
+
+            ; Digita x, Right, y, Down, Left para proxima linha
+            SendText(x_value)
+            Sleep(TYPE_DELAY_MS)
+
+            Send("{Right}")
+            Sleep(TYPE_DELAY_MS)
+
+            SendText(y_value)
+            Sleep(AFTER_Y_DELAY_MS)
+
+            if i < coords.Length {
+                Send("{Down}")
+                Sleep(TYPE_DELAY_MS)
+                Send("{Left}")
+                Sleep(TYPE_DELAY_MS)
+            }
+
+            if (Mod(i, 25) = 0)
+                Log("progresso: " . i . " / " . total)
+        }
+
+        ToolTip()
+        Log("FASE 2 concluida: " . total . " pontos preenchidos.")
+        MsgBox("Preenchimento de " . total . " coordenadas concluido com sucesso!", "Sucesso", 64)
+        return
+    }
+
+    ; ── Estrategia legada (ponto a ponto com criacao de linha) ────────────────
+    Log("Usando modo legado (ponto a ponto)...")
     for i, row in coords {
-        ; Verifica se a janela foi fechada (não apenas se perdeu foco)
-        if !WinExist("ahk_id " . vpro_hwnd) {
-            MsgBox(48, "Erro", "A janela do VPro foi fechada. Automação interrompida.")
+        if (i < INICIO_EM)
+            continue
+        if g_abort
+            return
+
+        ; nunca continuar sem a janela do VPro em foco
+        if !JanelaOk(vpro_hwnd) {
+            AbortarExecucao("Janela do VPro fechada ou sem foco (nao recuperado apos 1 tentativa).", i - 1)
             return
         }
 
-        ; Reativa a janela e aguarda
-        WinActivate("ahk_id " . vpro_hwnd)
-        Sleep(200)
-
         x_value := row[1]
         y_value := row[2]
+        ToolTip("Ponto " . i . " de " . total . ": " . x_value . " , " . y_value . " - Esc cancela")
 
-        if USAR_CONTROL_MODE and (X_CELL_CLASSNN != "") {
-            ; ───────────────────────────────────────────────────────────
-            ; MODO COM CONTROLES (RECOMENDADO)
-            ; ───────────────────────────────────────────────────────────
-
-            ; Foca a célula X
+        if (USAR_CONTROL_MODE and X_CELL_CLASSNN != "") {
+            ; ── modo controle ─────────────────────────────
             ControlFocus(X_CELL_CLASSNN, "ahk_id " . vpro_hwnd)
-            Sleep(20)
-
-            ; Define texto na célula X
+            Sleep(POINT_DELAY_MS // 3)
             ControlSetText(X_CELL_CLASSNN, x_value, "ahk_id " . vpro_hwnd)
-            Sleep(20)
-
-            ; Foca a célula Y
+            Sleep(POINT_DELAY_MS // 3)
             if (Y_CELL_CLASSNN != "") {
                 ControlFocus(Y_CELL_CLASSNN, "ahk_id " . vpro_hwnd)
-                Sleep(20)
+                Sleep(POINT_DELAY_MS // 3)
                 ControlSetText(Y_CELL_CLASSNN, y_value, "ahk_id " . vpro_hwnd)
             } else {
-                ; Fallback para Y (Tab)
                 Send("{Tab}")
                 SendText(y_value)
             }
-            Sleep(20)
-
-            ; Cria nova linha clicando no "+"
-            if i < coords.Length {
-                if (PLUS_BUTTON_CLASSNN != "") {
+            Sleep(POINT_DELAY_MS)
+            if (i < total) {
+                if (PLUS_BUTTON_CLASSNN != "")
                     ControlClick(PLUS_BUTTON_CLASSNN, "ahk_id " . vpro_hwnd)
-                } else {
-                    ; Fallback para botão "+" (Click)
-                    ; Coordenadas PLUS_X, PLUS_Y são relativas à janela do VPro (por CoordMode)
+                else
                     Click(PLUS_X, PLUS_Y)
-                }
-                Sleep(300)
-
-                ; Reativa janela após clique no "+"
-                WinActivate("ahk_id " . vpro_hwnd)
-                Sleep(200)
-
-                ; Aguarda a nova linha ser criada
-                Sleep(300)
+                Sleep(POINT_DELAY_MS * 2)
             }
         } else {
-            ; ───────────────────────────────────────────────────────────
-            ; MODO FALLBACK (Send/Click) - Sem ClassNN
-            ; ───────────────────────────────────────────────────────────
-
-            SendText(x_value)     ; Digita X
-            Sleep(150)
-
-            Send("{Tab}")         ; Move para Y
-            Sleep(150)
-
-            SendText(y_value)     ; Digita Y
-            Sleep(150)
-
-            if i < coords.Length {
-                ; Clica no botão "+" para criar nova linha
-                ; Coordenadas PLUS_X, PLUS_Y são relativas à janela do VPro (por CoordMode)
+            ; ── modo fallback legado ──────────────────────────────
+            SendText(x_value)
+            Sleep(POINT_DELAY_MS)
+            Send("{Tab}")
+            Sleep(POINT_DELAY_MS)
+            SendText(y_value)
+            Sleep(POINT_DELAY_MS)
+            if (i < total) {
                 Click(PLUS_X, PLUS_Y)
-                Sleep(300)
-
-                ; Reativa janela após clique no "+"
-                WinActivate("ahk_id " . vpro_hwnd)
-                Sleep(200)
-
-                ; Navega conforme modo selecionado
-                if AFTER_PLUS_MODE = "tab_tab" {
-                    Send("{Tab}")
-                    Send("{Tab}")
+                Sleep(POINT_DELAY_MS * 2)
+                if !JanelaOk(vpro_hwnd) {
+                    AbortarExecucao("Janela perdeu o foco apos clicar no '+'.", i)
+                    return
                 }
-                else if AFTER_PLUS_MODE = "down_left" {
+                if (AFTER_PLUS_MODE = "tab_tab") {
+                    Send("{Tab}")
+                    Send("{Tab}")
+                } else if (AFTER_PLUS_MODE = "down_left") {
                     Send("{Down}")
                     Send("{Left}")
-                }
-                else if AFTER_PLUS_MODE = "click_x_cell" {
-                    ; Clica na célula x(m) da próxima linha
-                    ; Coordenadas X_CELL_X e clickY são relativas à janela do VPro (por CoordMode)
+                } else if (AFTER_PLUS_MODE = "click_x_cell") {
                     clickY := X_CELL_Y_FIRST + i * ROW_HEIGHT
                     Click(X_CELL_X, clickY)
-                    Sleep(300)
+                    Sleep(POINT_DELAY_MS * 2)
                 }
             }
         }
+
+        if (Mod(i, 25) = 0)
+            Log("progresso: " . i . " / " . total)
     }
 
-    MsgBox(64, "Sucesso", "Preenchimento de " . coords.Length . " coordenadas concluído!")
+    ToolTip()
+    Log("Concluido: " . total . " pontos digitados.")
+    MsgBox("Preenchimento de " . total . " coordenadas concluido!", "Sucesso", 64)
 }

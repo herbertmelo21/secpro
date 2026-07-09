@@ -88,6 +88,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--max-inertia-error", type=float, default=0.002,
         help="erro relativo maximo de Ix e Iy aceito (padrao 0.002 = 0.2%%)",
     )
+    parser.add_argument(
+        "--max-vpro-points", type=int, default=None,
+        help="limite rigido de pontos para compatibilidade VPro (padrao None = sem limite); "
+        "reduz circle_points automaticamente (32→28→24→20→16) ate caber",
+    )
     return parser.parse_args(argv)
 
 
@@ -207,6 +212,29 @@ def build_simplified_walk(
     local = [(x - mid_x, y - min_y) for x, y in expanded]
     anchors = {walk.node_key(local[i]) for i in anchor_idx}
     return pvd.dedup_consecutive(local), anchors
+
+
+def find_best_circle_points_for_limit(
+    geo_dense: dict, ordered_dense: list[Point], max_points: int,
+    max_area_error: float = 0.005, max_inertia_error: float = 0.01,
+) -> tuple[int, list[Point]] | tuple[None, None]:
+    """Encontra o maior circle_points que produz total_pontos <= max_points,
+    com erros de area/inercia dentro dos limites. Tenta 32, 28, 24, 20, 16.
+
+    Retorna (circle_points_escolhido, pontos_simplificados) ou (None, None) se falhar.
+    """
+    ladder = (32, 28, 24, 20, 16)
+    for cp in ladder:
+        walk_pts, _ = build_simplified_walk(geo_dense, cp)
+        ordered, _ = order_points_vpro_safe(walk_pts)
+        if len(ordered) > max_points:
+            continue
+        props = validation.validate_section_properties(
+            ordered_dense, ordered, max_area_error, max_inertia_error
+        )
+        if props["ok"]:
+            return cp, ordered
+    return None, None
 
 
 def write_simplified_preview(points: list[Point], png_path: Path, title: str) -> str | None:
@@ -460,8 +488,199 @@ def run_simplified(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def run_vpro_limited(args: argparse.Namespace) -> int:
+    """Modo --max-vpro-points: reduz circle_points automaticamente ate caber no limite.
+
+    Tenta ladder (32→28→24→20→16) e aceita a primeira que passa na validacao
+    E cabe dentro do limite.
+    """
+    name = args.section_name
+    max_points = args.max_vpro_points
+    outputs = Path(args.outputs)
+    reports_dir = Path(args.reports)
+
+    out_dxf = outputs / "dxf" / f"{name}_vpro_simplified_{max_points}.dxf"
+    out_json = outputs / f"{name}_outer_ordered_{max_points}.json"
+    out_png = reports_dir / f"{name}_vpro_simplified_{max_points}.png"
+    out_csv = reports_dir / f"{name}_vpro_simplified_{max_points}.csv"
+    canonical_dxf = Path("section/DXF") / f"{name}_vpro_simplified_{max_points}.dxf"
+    canonical_ahk = Path("section/ahk") / f"{name}.ahk"
+    report_md = reports_dir / f"{name}_vpro_limited_{max_points}.md"
+
+    for target in (out_dxf, canonical_dxf):
+        if target.exists() and not args.force:
+            print(f"[ERRO] {target} ja existe - use --force para sobrescrever.")
+            return 1
+
+    # ── referencia densa (mesmo pipeline do modo padrao) ────────────────────
+    data = sp_io.load_json(Path(args.input_json))
+    geo = pvd.compute_section_points(data)
+    ordered_dense, _ = order_points_vpro_safe(geo["points_local"])
+
+    # ── encontra o melhor circle_points que cabe no limite ─────────────────
+    cp, ordered = find_best_circle_points_for_limit(
+        geo, ordered_dense, max_points,
+        args.max_area_error, args.max_inertia_error
+    )
+    if cp is None:
+        print(f"[FALHOU] nenhuma resolucao da escada (32,28,24,20,16) atendeu:")
+        print(f"  limite: {max_points} pontos")
+        print(f"  area_err <= {args.max_area_error:.4%}")
+        print(f"  inercia_err <= {args.max_inertia_error:.4%}")
+        return 1
+
+    # ── validacoes topologicas (mesma bateria) ─────────────────────────────
+    walk_pts = ordered  # ja validado
+    graph = walk.build_edge_graph(walk_pts, closed=True)
+    cycles = graph.cycle_census()
+    single_global_cycle = len(cycles) == 1 and cycles[0]["is_simple_cycle"]
+    continuous, chord_indices = walk.check_continuous_walk(ordered, graph, closed=True)
+    crossings = walk.self_intersections(ordered, closed=True)
+    clearance, ci, cj = walk.min_nonadjacent_clearance(ordered)
+    basic = validation.validate_polygon_basic(ordered)
+
+    lengths = geometry.segment_lengths(ordered, closed=True)
+    max_len = max(lengths) if lengths else 0
+    max_idx = lengths.index(max_len) if lengths else 0
+    max_seg_is_real_edge = graph.has_edge(ordered[max_idx], ordered[(max_idx + 1) % len(ordered)])
+
+    min_x, min_y, max_x, max_y = geometry.bbox(ordered)
+    start_is_top_left = (
+        ordered[0][1] >= max_y - (max_y - min_y) * Y_TOL_FRACTION
+        and ordered[0][0] <= (min_x + max_x) / 2
+    )
+    area_signed = geometry.signed_area(ordered)
+    direction = "horario (CW)" if area_signed < 0 else "anti-horario (CCW)"
+    gap_preserved = clearance > 1e-9
+
+    ok_topology = (
+        single_global_cycle and continuous and not crossings and basic.ok
+        and gap_preserved and max_seg_is_real_edge and start_is_top_left
+        and area_signed < 0
+    )
+
+    # ── DXF R12 + round-trip LibreDWG ──────────────────────────────────────
+    out_dxf.parent.mkdir(parents=True, exist_ok=True)
+    doc = pvd.build_r12_polyline_document(ordered)
+    doc.saveas(str(out_dxf))
+    pvd.inject_r12_insunits(out_dxf, insunits=6)
+
+    ezdxf_check = pvd.validate_r12_structure_ezdxf(out_dxf, "POLYLINE")
+    roundtrip = pvd.roundtrip_validate_r12(
+        out_dxf, reports_dir, f"{name}_vpro_limited_{max_points}", expect_polyline=True
+    )
+    rt_count = roundtrip.get("roundtrip_point_count")
+    if rt_count != len(ordered):
+        roundtrip["ok"] = False
+        roundtrip["messages"].append(
+            f"round-trip retornou {rt_count} vertices, esperado {len(ordered)}"
+        )
+    single_entity_ok = (
+        ezdxf_check["ok"]
+        and ezdxf_check.get("entity_counts", {}).get("POLYLINE", 0) == 1
+        and ezdxf_check.get("closed") is True
+    )
+    ok = ok_topology and single_entity_ok and roundtrip["ok"]
+
+    canonical_dxf.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(out_dxf, canonical_dxf)
+
+    # ── saidas auxiliares ──────────────────────────────────────────────────
+    write_ordered_json(ordered, out_json)
+    write_simplified_preview(
+        ordered, out_png,
+        f"{name} VPro Limited - {len(ordered)} pontos ({cp} pts/circulo, {direction})",
+    )
+    pvd.write_vpro_safe_csv(ordered, out_csv)
+
+    # ── relatorio ──────────────────────────────────────────────────────────
+    po, ps, err = (
+        geometry.polygon_area_centroid_inertia(ordered_dense),
+        geometry.polygon_area_centroid_inertia(ordered),
+        None,
+    )
+    props = validation.validate_section_properties(
+        ordered_dense, ordered, args.max_area_error, args.max_inertia_error
+    )
+    po, ps, err = props["original"], props["simplified"], props["errors"]
+    n_orig, n_simp = len(ordered_dense), len(ordered)
+    reduction = 100.0 * (1.0 - n_simp / n_orig)
+    check = lambda flag: "OK" if flag else "FALHOU"  # noqa: E731
+
+    lines = [
+        f"# Relatorio VPro Limited - {name} ({max_points} pontos max)",
+        "",
+        f"Limite rigido: {max_points} pontos. Circle_points escadado automaticamente.",
+        f"Fonte: `{args.input_json}` (LibreDWG JSON).",
+        f"Saida DXF: `{out_dxf}` (copia canonica `{canonical_dxf}`)",
+        f"Formato: DXF R12, 1 POLYLINE 2D fechada, $INSUNITS=6",
+        "",
+        "## Reducao de pontos",
+        "",
+        f"- Pontos originais (100 seg/semicirculo): {n_orig}",
+        f"- Pontos limitados: {n_simp}",
+        f"- Reducao: {reduction:.1f}%",
+        f"- Circle_points usado: {cp}",
+        "",
+        "## Propriedades seccionais (originais vs limitadas)",
+        "",
+        f"| Propriedade | Original | Limitada | Erro rel. | Limite |",
+        f"|---|---|---|---|---|",
+        f"| Area A (m^2) | {po['area']:.8f} | {ps['area']:.8f} | {err['area']:.4%} | {args.max_area_error:.2%} |",
+        f"| Ix (m^4) | {po['ix']:.6e} | {ps['ix']:.6e} | {err['ix']:.4%} | {args.max_inertia_error:.2%} |",
+        f"| Iy (m^4) | {po['iy']:.6e} | {ps['iy']:.6e} | {err['iy']:.4%} | {args.max_inertia_error:.2%} |",
+        "",
+        f"- [{check(err['area'] <= args.max_area_error)}] erro de area dentro do limite",
+        f"- [{check(err['ix'] <= args.max_inertia_error)}] erro de Ix dentro do limite",
+        f"- [{check(err['iy'] <= args.max_inertia_error)}] erro de Iy dentro do limite",
+        "",
+        "## Topologia",
+        "",
+        f"- [{check(single_global_cycle)}] 1 loop global (graus: {graph.degree_census()})",
+        f"- [{check(continuous)}] caminhada continua" + (f" (violacoes: {chord_indices[:5]})" if chord_indices else ""),
+        f"- [{check(not crossings)}] sem self-intersection" + (f" (cruzamentos: {crossings[:5]})" if crossings else ""),
+        f"- [{check(gap_preserved)}] canal preservado: folga {clearance*1000:.3f} mm",
+        f"- [{check(start_is_top_left)}] inicio no canto superior esquerdo",
+        f"- [{check(basic.ok)}] sem duplicatas/segmentos nulos",
+        f"- [{check(single_entity_ok)}] DXF com 1 POLYLINE fechada",
+        f"- [{check(roundtrip['ok'])}] round-trip LibreDWG: {rt_count} vertices",
+        "",
+        "## Saidas",
+        "",
+        f"- DXF: `{out_dxf}`",
+        f"- JSON: `{out_json}`",
+        f"- PNG: `{out_png}`",
+        f"- CSV: `{out_csv}`",
+        f"- AHK: `{canonical_ahk}`",
+        "",
+        f"**Resultado: {'PASSOU' if ok else 'FALHOU'}**",
+        "",
+    ]
+    sp_io.save_report(report_md, "\n".join(lines))
+    print("\n".join(lines))
+
+    # ── copiar para AHK canonica ───────────────────────────────────────────
+    if ok:
+        export_ahk = Path("scripts/export_autohotkey.py")
+        print(f"\nGerando AHK em `{canonical_ahk}`...")
+        import subprocess
+        subprocess.run([
+            str(Path(".venv") / "bin" / "python"),
+            str(export_ahk),
+            "--force",
+            "--input-json", str(out_json),
+            "--output", str(canonical_ahk),
+        ], check=True)
+        print(f"AHK salvo em {canonical_ahk}")
+
+    print(f"relatorio salvo em {report_md}")
+    return 0 if ok else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.max_vpro_points:
+        return run_vpro_limited(args)
     if args.simplify:
         return run_simplified(args)
     name = args.section_name

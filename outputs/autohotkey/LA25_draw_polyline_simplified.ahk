@@ -313,7 +313,8 @@ F8:: {
     ; ── Estrategia PRECREATE + FILL (recomendado para grid longo) ─────────────
     if (PRECREATE_ROWS and !USAR_CONTROL_MODE) {
         Log("FASE 1: criando " . (total - 1) . " linhas vazias...")
-        for i := 2 to total {
+        Loop (total - 1) {
+            i := A_Index + 1
             if g_abort
                 return
             if !JanelaOk(vpro_hwnd) {

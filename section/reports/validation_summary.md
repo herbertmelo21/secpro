@@ -16,7 +16,7 @@
 
 ## LA25_region_r12_20gon.dxf
 
-- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dwgread -O JSON -o /tmp/section_pipeline_validate_xfjjcph0/LA25_region_r12_20gon.json /tmp/section_pipeline_validate_xfjjcph0/LA25_region_r12_20gon.dwg
+- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dwgread -O JSON -o /tmp/section_pipeline_validate_18n8cunl/LA25_region_r12_20gon.json /tmp/section_pipeline_validate_18n8cunl/LA25_region_r12_20gon.dwg
 veja log em section/reports/LA25_region_r12_20gon.dwgread.log
 - Entidades: {'POLYLINE': 6}
 - LWPOLYLINE: 0
@@ -27,7 +27,7 @@ veja log em section/reports/LA25_region_r12_20gon.dwgread.log
 
 ## LA25_vpro.dxf
 
-- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dxf2dwg -y -o /tmp/section_pipeline_validate_lq8wv13t/LA25_vpro.dwg section/DXF/LA25_vpro.dxf
+- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dxf2dwg -y -o /tmp/section_pipeline_validate_ff76qdso/LA25_vpro.dwg section/DXF/LA25_vpro.dxf
 veja log em section/reports/LA25_vpro.dxf2dwg.log
 - Entidades: {'LWPOLYLINE': 1}
 - LWPOLYLINE: 1
@@ -41,7 +41,7 @@ veja log em section/reports/LA25_vpro.dxf2dwg.log
 
 ## LA25_vpro_r12_lines_lowres.dxf
 
-- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dwgread -O JSON -o /tmp/section_pipeline_validate_y0lkv2xp/LA25_vpro_r12_lines_lowres.json /tmp/section_pipeline_validate_y0lkv2xp/LA25_vpro_r12_lines_lowres.dwg
+- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dwgread -O JSON -o /tmp/section_pipeline_validate_poevzu85/LA25_vpro_r12_lines_lowres.json /tmp/section_pipeline_validate_poevzu85/LA25_vpro_r12_lines_lowres.dwg
 veja log em section/reports/LA25_vpro_r12_lines_lowres.dwgread.log
 - Entidades: {'LINE': 230}
 - LWPOLYLINE: 0
@@ -52,7 +52,7 @@ veja log em section/reports/LA25_vpro_r12_lines_lowres.dwgread.log
 
 ## LA25_vpro_r12_polyline.dxf
 
-- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dwgread -O JSON -o /tmp/section_pipeline_validate_0199480i/LA25_vpro_r12_polyline.json /tmp/section_pipeline_validate_0199480i/LA25_vpro_r12_polyline.dwg
+- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dwgread -O JSON -o /tmp/section_pipeline_validate_tbudb2us/LA25_vpro_r12_polyline.json /tmp/section_pipeline_validate_tbudb2us/LA25_vpro_r12_polyline.dwg
 veja log em section/reports/LA25_vpro_r12_polyline.dwgread.log
 - Entidades: {'POLYLINE': 1}
 - LWPOLYLINE: 0
@@ -63,7 +63,7 @@ veja log em section/reports/LA25_vpro_r12_polyline.dwgread.log
 
 ## LA25_vpro_r12_polyline_lowres.dxf
 
-- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dwgread -O JSON -o /tmp/section_pipeline_validate_owticnix/LA25_vpro_r12_polyline_lowres.json /tmp/section_pipeline_validate_owticnix/LA25_vpro_r12_polyline_lowres.dwg
+- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dwgread -O JSON -o /tmp/section_pipeline_validate_hx66srku/LA25_vpro_r12_polyline_lowres.json /tmp/section_pipeline_validate_hx66srku/LA25_vpro_r12_polyline_lowres.dwg
 veja log em section/reports/LA25_vpro_r12_polyline_lowres.dwgread.log
 - Entidades: {'POLYLINE': 1}
 - LWPOLYLINE: 0
@@ -74,8 +74,30 @@ veja log em section/reports/LA25_vpro_r12_polyline_lowres.dwgread.log
 
 ## LA25_vpro_safe_ordered.dxf
 
-- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dwgread -O JSON -o /tmp/section_pipeline_validate_ws0bnr9n/LA25_vpro_safe_ordered.json /tmp/section_pipeline_validate_ws0bnr9n/LA25_vpro_safe_ordered.dwg
+- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dwgread -O JSON -o /tmp/section_pipeline_validate_qsqiyz95/LA25_vpro_safe_ordered.json /tmp/section_pipeline_validate_qsqiyz95/LA25_vpro_safe_ordered.dwg
 veja log em section/reports/LA25_vpro_safe_ordered.dwgread.log
+- Entidades: {'POLYLINE': 1}
+- LWPOLYLINE: 0
+- CIRCLE: False, ARC: False, LINE: False
+- $INSUNITS: 6 (6 = metros)
+
+**Resultado: FALHOU**
+
+## LA25_vpro_safe_simplified.dxf
+
+- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dwgread -O JSON -o /tmp/section_pipeline_validate_sfsyee0w/LA25_vpro_safe_simplified.json /tmp/section_pipeline_validate_sfsyee0w/LA25_vpro_safe_simplified.dwg
+veja log em section/reports/LA25_vpro_safe_simplified.dwgread.log
+- Entidades: {'POLYLINE': 1}
+- LWPOLYLINE: 0
+- CIRCLE: False, ARC: False, LINE: False
+- $INSUNITS: 6 (6 = metros)
+
+**Resultado: FALHOU**
+
+## LA25_vpro_simplified_160.dxf
+
+- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dwgread -O JSON -o /tmp/section_pipeline_validate_4ggcob3w/LA25_vpro_simplified_160.json /tmp/section_pipeline_validate_4ggcob3w/LA25_vpro_simplified_160.dwg
+veja log em section/reports/LA25_vpro_simplified_160.dwgread.log
 - Entidades: {'POLYLINE': 1}
 - LWPOLYLINE: 0
 - CIRCLE: False, ARC: False, LINE: False
@@ -85,7 +107,7 @@ veja log em section/reports/LA25_vpro_safe_ordered.dwgread.log
 
 ## LA25_vpro_slots_r12_20gon_2mm.dxf
 
-- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dwgread -O JSON -o /tmp/section_pipeline_validate_vt11q__3/LA25_vpro_slots_r12_20gon_2mm.json /tmp/section_pipeline_validate_vt11q__3/LA25_vpro_slots_r12_20gon_2mm.dwg
+- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dwgread -O JSON -o /tmp/section_pipeline_validate_ay9rpvn5/LA25_vpro_slots_r12_20gon_2mm.json /tmp/section_pipeline_validate_ay9rpvn5/LA25_vpro_slots_r12_20gon_2mm.dwg
 veja log em section/reports/LA25_vpro_slots_r12_20gon_2mm.dwgread.log
 - Entidades: {'POLYLINE': 1}
 - LWPOLYLINE: 0
@@ -96,7 +118,7 @@ veja log em section/reports/LA25_vpro_slots_r12_20gon_2mm.dwgread.log
 
 ## LA25_vpro_slots_r12_20gon_5mm.dxf
 
-- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dwgread -O JSON -o /tmp/section_pipeline_validate_sc7rpa1_/LA25_vpro_slots_r12_20gon_5mm.json /tmp/section_pipeline_validate_sc7rpa1_/LA25_vpro_slots_r12_20gon_5mm.dwg
+- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dwgread -O JSON -o /tmp/section_pipeline_validate_zsj_kuh2/LA25_vpro_slots_r12_20gon_5mm.json /tmp/section_pipeline_validate_zsj_kuh2/LA25_vpro_slots_r12_20gon_5mm.dwg
 veja log em section/reports/LA25_vpro_slots_r12_20gon_5mm.dwgread.log
 - Entidades: {'POLYLINE': 1}
 - LWPOLYLINE: 0
@@ -107,7 +129,7 @@ veja log em section/reports/LA25_vpro_slots_r12_20gon_5mm.dwgread.log
 
 ## LA25_vpro_slots_r12_20gon_5mm_bare.dxf
 
-- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dxf2dwg -y -o /tmp/section_pipeline_validate_i9ko3ffo/LA25_vpro_slots_r12_20gon_5mm_bare.dwg section/DXF/LA25_vpro_slots_r12_20gon_5mm_bare.dxf
+- Round-trip LibreDWG (dxf2dwg + dwgread -O JSON): FALHOU - round-trip LibreDWG falhou: comando reportou erro na saida: /usr/local/bin/dxf2dwg -y -o /tmp/section_pipeline_validate_pcsq8xp6/LA25_vpro_slots_r12_20gon_5mm_bare.dwg section/DXF/LA25_vpro_slots_r12_20gon_5mm_bare.dxf
 veja log em section/reports/LA25_vpro_slots_r12_20gon_5mm_bare.dxf2dwg.log
 - Entidades: {'POLYLINE': 1}
 - LWPOLYLINE: 0

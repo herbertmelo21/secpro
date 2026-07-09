@@ -1187,15 +1187,22 @@ F8:: {
             y_value := row[2]
             ToolTip("Preenchendo ponto " . i . " de " . total . ": " . x_value . " , " . y_value)
 
-            ; Digita x, Tab, y, Tab (Tab move para x da proxima linha)
+            ; Digita x, Right, y, Down, Left para proxima linha
             SendText(x_value)
             Sleep(TYPE_DELAY_MS)
-            Send("{Tab}")
+
+            Send("{Right}")
             Sleep(TYPE_DELAY_MS)
+
             SendText(y_value)
             Sleep(AFTER_Y_DELAY_MS)
-            Send("{Tab}")
-            Sleep(TYPE_DELAY_MS)
+
+            if i < coords.Length {
+                Send("{Down}")
+                Sleep(TYPE_DELAY_MS)
+                Send("{Left}")
+                Sleep(TYPE_DELAY_MS)
+            }
 
             if (Mod(i, 25) = 0)
                 Log("progresso: " . i . " / " . total)
